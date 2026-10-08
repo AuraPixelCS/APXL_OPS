@@ -1,11 +1,11 @@
 import type { Metadata } from "next"
-import { ImportPage } from "@/components/leads/import-page"
+import { SheetsPage } from "@/components/sheets/sheets-page"
 
-export const metadata: Metadata = { title: "Import CSV" }
+export const metadata: Metadata = { title: "Sheets" }
 
 // Rendered only after the client-side auth gate resolves; see (app)/layout.tsx.
 export const instant = false
 
 export default function Page() {
-  return <ImportPage />
+  return <SheetsPage />
 }

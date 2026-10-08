@@ -1,9 +1,17 @@
-// Tests lib/leads/clean.ts. Runs on plain Node (type stripping), no Next needed.
+// Tests lib/leads/clean.ts, grid.ts and sheets.ts. Runs on plain Node (type
+// stripping), no Next needed.
 //   npm test                          -> fixed cases
 //   npm test -- path/to/leads.csv     -> also summarises a real export
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { cleanLead, dedupeKey, needsALook } from "../lib/leads/clean.ts"
+import { cellText, findHeaderRow, gridToTab } from "../lib/leads/grid.ts"
+import {
+  clientKeyOf,
+  guessClient,
+  titleFromFile,
+  validateSheetDetails,
+} from "../lib/leads/sheets.ts"
 
 type Case = { in: Record<string, string>; expect: Record<string, unknown> }
 const cases: Case[] = [
@@ -160,6 +168,77 @@ assert.equal(
   false
 )
 passed += 5
+
+// Spreadsheets: phones stored as numbers lose their leading 0; "E-mail" headers.
+assert.equal(cleanLead({ phone: "123456789" }).phone, "60123456789")
+assert.equal(cleanLead({ phone: "1123456789" }).phone, "601123456789")
+assert.equal(
+  cleanLead({ phone: "+1 2125551234" }).flags.includes("phone_foreign"),
+  true
+)
+assert.equal(cleanLead({ "E-mail": "x@y.co" }).email, "x@y.co")
+passed += 4
+
+// Grid → rows: header found below title rows, blanks/repeats named, empty rows dropped.
+const grid = [
+  ["Skill2U leads, March", "", ""],
+  ["", "", ""],
+  ["Full Name", "Email", "Email"],
+  ["Ann Lee", "ann@x.co", "ann2@x.co"],
+  ["", "", ""],
+  ["Bo Tan", "bo@x.co", ""],
+]
+assert.equal(findHeaderRow(grid), 2)
+const tab = gridToTab("March", grid)
+assert.deepEqual(tab.columns, ["Full Name", "Email", "Email (2)"])
+assert.equal(tab.rows.length, 2)
+assert.deepEqual(tab.rows[1], { "Full Name": "Bo Tan", Email: "bo@x.co" })
+assert.deepEqual(
+  gridToTab("", [
+    ["Name", ""],
+    ["Ann", "x"],
+  ]).columns,
+  ["Name", "Column 2"]
+)
+assert.equal(gridToTab("", []).rows.length, 0)
+assert.equal(cellText(601123456789), "601123456789")
+assert.equal(cellText(new Date(2026, 2, 5)), "2026-03-05")
+assert.equal(cellText(new Date(2026, 2, 5, 14, 30)), "2026-03-05 14:30")
+assert.equal(cellText(null), "")
+passed += 10
+
+// Sheet titles and clients.
+assert.equal(
+  titleFromFile("Skill2U_Leads_March-2026.xlsx"),
+  "Skill2U Leads March-2026"
+)
+assert.equal(titleFromFile("leads.xlsx", "Week 1"), "leads – Week 1")
+assert.equal(clientKeyOf("  Skill2U   Academy "), "skill2u academy")
+assert.equal(
+  guessClient("skill2u-march.csv", ["AuraPixel", "Skill2U"]),
+  "Skill2U"
+)
+assert.equal(
+  guessClient("PEOPLElogy_Summit leads.xlsx", ["People", "PEOPLElogy Summit"]),
+  "PEOPLElogy Summit"
+)
+assert.equal(guessClient("march.csv", ["Skill2U"]), null)
+assert.deepEqual(validateSheetDetails({ title: " ", client: "" }), {
+  ok: false,
+  errors: {
+    title: "Give this sheet a title.",
+    client: "Which client are these leads for?",
+  },
+})
+assert.deepEqual(
+  validateSheetDetails({ title: " March ", client: "Skill2U " }),
+  {
+    ok: true,
+    title: "March",
+    client: "Skill2U",
+  }
+)
+passed += 8
 console.log(`clean: ${passed} checks passed`)
 
 const csvPath = process.argv[2]

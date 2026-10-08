@@ -34,6 +34,7 @@ export type LeadStatus = "new" | "emailed" | "replied" | "booked" | "closed"
 
 export type LeadScore = "hot" | "warm" | "cold"
 
+/** The first sheet this person came in on. */
 export interface LeadSource {
   type: "csv"
   fileName: string
@@ -47,6 +48,11 @@ export interface Lead extends CleanLead {
   score: LeadScore | null
   scoreReason: string | null
   summary: string | null
+  /** The client (business) these leads were collected for. */
+  client: string
+  clientKey: string
+  /** Every sheet (import) this person appeared in, for this client. */
+  sheetIds: string[]
   source: LeadSource
   createdAt: Date | null
   updatedAt: Date | null
@@ -55,7 +61,10 @@ export interface Lead extends CleanLead {
 
 export interface ImportResult {
   importId: string
+  title: string
+  client: string
   created: number
+  /** Already in Ops for this client: listed under this sheet too, otherwise untouched. */
   alreadyInOps: number
   duplicatesInFile: number
 }

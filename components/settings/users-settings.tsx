@@ -20,10 +20,10 @@ import {
 } from "lucide-react"
 import * as React from "react"
 import { useAuth } from "@/components/auth/auth-provider"
+import { ConfirmDialog } from "@/components/common/dialog-shell"
 import { EmptyState } from "@/components/common/empty-state"
 import { FilterTabs } from "@/components/common/filter-tabs"
 import {
-  ConfirmDialog,
   CredentialsDialog,
   PasswordDialog,
   UserFormDialog,

@@ -39,10 +39,13 @@ page proxies `/ops` to `apxl-ops.vercel.app/ops`.
 ## What's built
 
 - Sign-in with Firebase: **admins** get all of Ops; **clients** get their own screen and no access to admin data
-- **Leads**: live list with counts, filters (not contacted, needs a look, can't
-  email), search, and a card layout on phones
-- **Import CSV**: Meta exports (UTF-16) and Google Sheets CSVs, a cleaned preview
-  with what needs a look, duplicates skipped across files
+- **Leads**: live list with counts, client and sheet filters, status filters (not
+  contacted, needs a look, can't email), search, and a card layout on phones
+- **Sheets**: every imported file with its title and client; open one to see its leads,
+  rename it or delete it
+- **Import**: CSV, Excel (.xlsx/.xls), Google Sheets exports, Numbers and .ods; picks the
+  tab in multi-tab workbooks, title filled from the file name, client suggested from
+  earlier sheets, a cleaned preview, duplicates skipped per client
 - **Lead page**: contact details, what's worth checking, the original form answers,
   and the space where the email conversation will appear
 - **Settings → Users**: add admins and clients, edit them, change roles, set or generate

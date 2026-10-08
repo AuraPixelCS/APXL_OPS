@@ -17,6 +17,16 @@ const nextConfig: NextConfig = {
   // Kept out of the server bundle so the Firestore client and our Vercel →
   // Google auth client share one copy of google-auth-library.
   serverExternalPackages: ["google-auth-library", "@vercel/oidc"],
+  // Import moved under Sheets (2026-10-08).
+  async redirects() {
+    return [
+      {
+        source: "/leads/import",
+        destination: "/sheets/import",
+        permanent: false,
+      },
+    ]
+  },
   cacheComponents: true,
   partialPrefetching: true,
   // Lets a verification build run beside a running dev server without both

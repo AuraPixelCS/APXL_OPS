@@ -1,7 +1,12 @@
 "use client"
 
 import { signOut } from "firebase/auth"
-import { LogOutIcon, SettingsIcon, UploadIcon, UsersIcon } from "lucide-react"
+import {
+  FileSpreadsheetIcon,
+  LogOutIcon,
+  SettingsIcon,
+  UsersIcon,
+} from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth/auth-provider"
@@ -39,14 +44,13 @@ const NAV_GROUPS = [
         href: "/leads",
         label: "Leads",
         icon: UsersIcon,
-        isActive: (p: string) =>
-          p === "/leads" || /^\/leads\/(?!import)/.test(p),
+        isActive: (p: string) => p === "/leads" || p.startsWith("/leads/"),
       },
       {
-        href: "/leads/import",
-        label: "Import CSV",
-        icon: UploadIcon,
-        isActive: (p: string) => p === "/leads/import",
+        href: "/sheets",
+        label: "Sheets",
+        icon: FileSpreadsheetIcon,
+        isActive: (p: string) => p.startsWith("/sheets"),
       },
     ],
   },

@@ -34,7 +34,7 @@ const PLACEHOLDER_MAIL = new Set(["email.com", "example.com", "test.com"])
 const NAME_KEYS = ["full_name", "name", "fullname", "your_name"]
 const FIRST_KEYS = ["first_name", "firstname"]
 const LAST_KEYS = ["last_name", "lastname", "surname"]
-const EMAIL_KEYS = ["email", "work_email", "email_address", "e-mail"]
+const EMAIL_KEYS = ["email", "work_email", "email_address", "e_mail"]
 const PHONE_KEYS = [
   "phone_number",
   "phone",
@@ -53,6 +53,11 @@ const KNOWN_KEYS = new Set([
 
 const MAX_EXTRA_FIELDS = 40
 const MAX_EXTRA_LENGTH = 500
+
+/** A column we read a name, email or phone from (used to find the header row). */
+export function isContactColumn(header: string): boolean {
+  return KNOWN_KEYS.has(normalizeKey(header))
+}
 
 /** "Full Name " → "full_name", so differently written headers match. */
 export function normalizeKey(key: string): string {
@@ -150,7 +155,11 @@ function tidyPhone(
     flags.push("phone_invalid")
     return { phone: raw, ok: false }
   }
-  if (phone.startsWith("0")) phone = "6" + phone // 012-345 6789 → 60123456789
+  if (phone.startsWith("0"))
+    phone = "6" + phone // 012-345 6789 → 60123456789
+  // Spreadsheets that store phones as numbers drop the leading 0: 123456789.
+  else if (/^1\d{8,9}$/.test(phone) && !raw.trim().startsWith("+"))
+    phone = "60" + phone
   if (phone.startsWith("60")) {
     if (/^601\d{8,9}$/.test(phone)) return { phone, ok: true } // Malaysian mobile
     if (/^60[3-9]\d{7,8}$/.test(phone)) {

@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useLead } from "@/hooks/use-leads"
+import { useSheets } from "@/hooks/use-sheets"
 import { formatDateTime, formatPhone } from "@/lib/format"
 import type { Lead } from "@/lib/leads/types"
 
@@ -93,6 +94,11 @@ export function LeadDetailPage() {
 }
 
 function LeadView({ lead }: { lead: Lead }) {
+  const { data: sheets } = useSheets()
+  const sheetsById = React.useMemo(
+    () => new Map(sheets.map((s) => [s.id, s])),
+    [sheets]
+  )
   const answers = Object.entries(lead.extra)
   return (
     <>
@@ -156,8 +162,35 @@ function LeadView({ lead }: { lead: Lead }) {
                 <dd>Hi {lead.greetingName}</dd>
                 <dt className="text-muted-foreground">Added</dt>
                 <dd>{formatDateTime(lead.createdAt)}</dd>
-                <dt className="text-muted-foreground">From</dt>
-                <dd className="break-all">{lead.source.fileName || "—"}</dd>
+                <dt className="text-muted-foreground">Client</dt>
+                <dd>
+                  {lead.clientKey ? (
+                    <Link
+                      href={`/leads?client=${encodeURIComponent(lead.clientKey)}`}
+                      className="underline-offset-4 hover:underline"
+                    >
+                      {lead.client}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+                <dt className="text-muted-foreground">
+                  {lead.sheetIds.length > 1 ? "Sheets" : "Sheet"}
+                </dt>
+                <dd className="flex flex-col gap-1">
+                  {lead.sheetIds.length === 0
+                    ? lead.source.fileName || "—"
+                    : lead.sheetIds.map((id) => (
+                        <Link
+                          key={id}
+                          href={`/leads?sheet=${id}`}
+                          className="break-words underline-offset-4 hover:underline"
+                        >
+                          {sheetsById.get(id)?.title ?? "Deleted sheet"}
+                        </Link>
+                      ))}
+                </dd>
               </dl>
             </CardContent>
           </Card>

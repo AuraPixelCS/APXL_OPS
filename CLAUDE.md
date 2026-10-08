@@ -54,8 +54,25 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   import preview (browser) and `POST /api/leads/import` (server re-cleans raw
   rows). Tests: `npm test` (`scripts/test-clean.ts`, plain Node type stripping;
   `allowImportingTsExtensions` is on for that).
-- Lead IDs are sha256 of `email:<addr>` (else `phone:<digits>`), so re-imports
-  never duplicate people; existing leads are never overwritten by an import.
+- **Sheets** (`/sheets`, `imports/{id}`): every import is a sheet with a `title` and a
+  `client` (+ `clientKey` = lowercased, spaces collapsed; the first spelling wins). Leads
+  carry `client`, `clientKey` and `sheetIds[]`. Lead IDs are sha256 of
+  `<clientKey>|email:<addr>` (else `|phone:<digits>`): duplicates are matched **per
+  client**, so the same person for two clients is two leads, and a re-import for the same
+  client adds the sheet to `sheetIds` without overwriting anything. The sheet doc is
+  written before its leads, so deleting a half-imported sheet cleans up.
+  `POST /api/sheets/delete` deletes leads only in that sheet and `arrayRemove`s it from
+  the rest; `/api/sheets/update` renames only (client is fixed: delete + re-import).
+- **File formats** (`lib/leads/file.ts`, browser): CSV/TSV/TXT through Papa Parse (UTF-16
+  Meta exports sniffed by BOM); XLSX/XLSM/XLS/ODS/Numbers/Excel-XML through SheetJS,
+  lazy-loaded. SheetJS comes from `cdn.sheetjs.com` (0.20.3) because the npm `xlsx` is
+  stale and vulnerable. Formats are detected by magic bytes, not extension. Everything
+  becomes a grid → `lib/leads/grid.ts` (header row = first of the top 10 rows naming a
+  name/email/phone column; numeric cells keep every digit). `cleanLead` turns a 9–10
+  digit number starting with 1 (Excel dropped the 0) into `60…`.
+- Leads list scoping (`useLeads({clientKey | sheetId})`) uses single-field `where`
+  filters with no `orderBy`, so no composite indexes; sorted in the browser. Unscoped it's
+  the newest 1000. Filters live in the URL (`/leads?client=…` / `?sheet=…`).
 - **Settings** (`/settings`): `lib/settings.ts` is the single source for sections
   (email, assistant, scoring), their starting values and validation; the form
   (`components/settings/use-settings-form.ts`, edits-over-live-values, no effects)

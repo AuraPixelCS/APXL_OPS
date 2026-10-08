@@ -1,5 +1,6 @@
 "use client"
 
+import { createListCollection } from "@ark-ui/react/collection"
 import {
   BuildingIcon,
   ChevronRightIcon,
@@ -7,9 +8,10 @@ import {
   TriangleAlertIcon,
   UploadIcon,
   UsersIcon,
+  XIcon,
 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import * as React from "react"
 import { EmptyState } from "@/components/common/empty-state"
 import { FilterTabs } from "@/components/common/filter-tabs"
@@ -29,6 +31,13 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -43,9 +52,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useLeads } from "@/hooks/use-leads"
+import { LIST_LIMIT, useLeads } from "@/hooks/use-leads"
+import { type ClientSummary, useSheets } from "@/hooks/use-sheets"
 import { formatRelative } from "@/lib/format"
 import { needsALook } from "@/lib/leads/clean"
+import type { Sheet } from "@/lib/leads/sheets"
 import type { Lead } from "@/lib/leads/types"
 
 type Filter = "all" | "new" | "look" | "cant"
@@ -62,10 +73,38 @@ const FILTERS: { value: Filter; label: string; test: (l: Lead) => boolean }[] =
     { value: "cant", label: "Can’t email", test: (l) => !l.emailOk },
   ]
 
+const ALL = "__all"
+
 export function LeadsPage() {
-  const { data: leads, loading, error } = useLeads()
+  const router = useRouter()
+  const params = useSearchParams()
+  const sheetId = params.get("sheet") ?? ""
+  const clientParam = params.get("client") ?? ""
+  const { data: sheets, clients } = useSheets()
+  const sheetsById = React.useMemo(
+    () => new Map(sheets.map((s) => [s.id, s])),
+    [sheets]
+  )
+  const sheet = sheetId ? sheetsById.get(sheetId) : undefined
+  // A sheet belongs to one client, so picking a sheet picks its client too.
+  const clientKey = sheet?.clientKey ?? (sheetId ? "" : clientParam)
+  const {
+    data: leads,
+    loading,
+    error,
+    capped,
+  } = useLeads(sheetId ? { sheetId } : { clientKey })
   const [filter, setFilter] = React.useState<Filter>("all")
   const [search, setSearch] = React.useState("")
+  const scoped = Boolean(sheetId || clientKey)
+
+  function setScope(next: { client?: string; sheet?: string }) {
+    const q = new URLSearchParams()
+    if (next.sheet) q.set("sheet", next.sheet)
+    else if (next.client) q.set("client", next.client)
+    const qs = q.toString()
+    router.replace(qs ? `/leads?${qs}` : "/leads", { scroll: false })
+  }
 
   const counts = React.useMemo(
     () => ({
@@ -90,24 +129,81 @@ export function LeadsPage() {
     )
   }, [leads, filter, search])
 
+  const nothingYet = !loading && !scoped && leads.length === 0 && !error
+
   return (
     <AppShell
       title="Leads"
       actions={
         <Button asChild size="lg">
-          <Link href="/leads/import">
+          <Link href="/sheets/import">
             <UploadIcon />
-            <span>Import CSV</span>
+            <span>Import</span>
           </Link>
         </Button>
       }
     >
       <div className="flex flex-col gap-5 page-x py-5 sm:py-6">
+        {(sheets.length > 0 || scoped) && (
+          <section
+            aria-label="Choose client and sheet"
+            className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+          >
+            <ClientFilter
+              clients={clients}
+              value={clientKey || ALL}
+              onChange={(v) => setScope({ client: v === ALL ? "" : v })}
+            />
+            <SheetFilter
+              sheets={
+                clientKey
+                  ? sheets.filter((s) => s.clientKey === clientKey)
+                  : sheets
+              }
+              showClient={!clientKey}
+              value={sheetId || ALL}
+              onChange={(v) =>
+                setScope(v === ALL ? { client: clientKey } : { sheet: v })
+              }
+            />
+            {scoped && (
+              <Button
+                variant="ghost"
+                size="xl"
+                className="self-start sm:self-auto"
+                onClick={() => setScope({})}
+              >
+                <XIcon />
+                Show all leads
+              </Button>
+            )}
+          </section>
+        )}
+
+        {sheetId && !sheet && sheets.length > 0 && (
+          <Alert>
+            <TriangleAlertIcon />
+            <AlertTitle>That sheet no longer exists</AlertTitle>
+            <AlertDescription>
+              It may have been deleted. Pick another sheet above.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <section
           aria-label="Lead counts"
           className="grid grid-cols-2 gap-3 lg:grid-cols-4"
         >
-          <StatTile label="All leads" value={loading ? "–" : counts.all} />
+          <StatTile
+            label={
+              sheet
+                ? "Leads in this sheet"
+                : clientKey
+                  ? "Leads for this client"
+                  : "All leads"
+            }
+            value={loading ? "–" : counts.all}
+          />
           <StatTile
             label="Not contacted yet"
             value={loading ? "–" : counts.notContacted}
@@ -129,16 +225,16 @@ export function LeadsPage() {
           </Alert>
         )}
 
-        {!loading && leads.length === 0 && !error ? (
+        {nothingYet ? (
           <EmptyState
             icon={UsersIcon}
             title="No leads yet"
-            body="Import a CSV exported from Meta (or any sheet with name, email and phone columns). Importing doesn't email anyone."
+            body="Import a lead sheet: a Meta export, Excel, Google Sheets or Numbers file with name, email and phone columns. Importing doesn't email anyone."
             action={
               <Button asChild size="xl">
-                <Link href="/leads/import">
+                <Link href="/sheets/import">
                   <UploadIcon />
-                  Import CSV
+                  Import a sheet
                 </Link>
               </Button>
             }
@@ -170,23 +266,147 @@ export function LeadsPage() {
               <LoadingRows />
             ) : visible.length === 0 ? (
               <p className="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                No leads match this filter.
+                {leads.length === 0
+                  ? sheet
+                    ? "No leads in this sheet."
+                    : "No leads for this client yet."
+                  : "No leads match this filter."}
               </p>
             ) : (
               <>
-                <LeadsTable leads={visible} />
-                <LeadCards leads={visible} />
+                <LeadsTable leads={visible} sheetsById={sheetsById} />
+                <LeadCards leads={visible} sheetsById={sheetsById} />
               </>
             )}
             {!loading && visible.length > 0 && (
               <p className="text-xs text-muted-foreground">
-                Showing {visible.length} of {leads.length}
+                Showing {visible.length.toLocaleString()} of{" "}
+                {leads.length.toLocaleString()}
+                {capped &&
+                  `. These are the newest ${LIST_LIMIT.toLocaleString()}: pick a client or sheet to see older leads.`}
               </p>
             )}
           </section>
         )}
       </div>
     </AppShell>
+  )
+}
+
+function ClientFilter({
+  clients,
+  value,
+  onChange,
+}: {
+  clients: ClientSummary[]
+  value: string
+  onChange: (v: string) => void
+}) {
+  const collection = React.useMemo(
+    () =>
+      createListCollection({
+        items: [
+          { value: ALL, label: "All clients" },
+          ...clients.map((c) => ({ value: c.clientKey, label: c.client })),
+        ],
+      }),
+    [clients]
+  )
+  return (
+    <Select
+      collection={collection}
+      value={[value]}
+      onValueChange={(d) => onChange(d.value[0] ?? ALL)}
+      positioning={{ sameWidth: true }}
+    >
+      <SelectTrigger
+        size="lg"
+        className="h-10 w-full sm:w-60"
+        aria-label="Client"
+      >
+        <SelectValue placeholder="All clients" />
+      </SelectTrigger>
+      <SelectContent>
+        {collection.items.map((item) => (
+          <SelectItem key={item.value} item={item}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+function SheetFilter({
+  sheets,
+  showClient,
+  value,
+  onChange,
+}: {
+  sheets: Sheet[]
+  showClient: boolean
+  value: string
+  onChange: (v: string) => void
+}) {
+  const collection = React.useMemo(
+    () =>
+      createListCollection({
+        items: [
+          { value: ALL, label: "All sheets" },
+          ...sheets.map((s) => ({
+            value: s.id,
+            label:
+              showClient && s.client ? `${s.title} · ${s.client}` : s.title,
+          })),
+        ],
+      }),
+    [sheets, showClient]
+  )
+  return (
+    <Select
+      collection={collection}
+      value={[value]}
+      onValueChange={(d) => onChange(d.value[0] ?? ALL)}
+      positioning={{ sameWidth: true }}
+    >
+      <SelectTrigger
+        size="lg"
+        className="h-10 w-full sm:w-80"
+        aria-label="Sheet"
+      >
+        <SelectValue placeholder="All sheets" />
+      </SelectTrigger>
+      <SelectContent>
+        {collection.items.map((item) => (
+          <SelectItem key={item.value} item={item}>
+            <span className="truncate">{item.label}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+/** "Skill2U · March 2026" (+1 when the person is in several sheets). */
+function From({
+  lead,
+  sheetsById,
+}: {
+  lead: Lead
+  sheetsById: Map<string, Sheet>
+}) {
+  const latest = sheetsById.get(lead.sheetIds[lead.sheetIds.length - 1] ?? "")
+  const more = lead.sheetIds.length - 1
+  return (
+    <span className="flex min-w-0 flex-col">
+      <span className="truncate">{lead.client || "—"}</span>
+      {latest && (
+        <span className="truncate text-xs text-muted-foreground">
+          {latest.title}
+          {more > 0 && ` +${more}`}
+        </span>
+      )}
+    </span>
   )
 }
 
@@ -213,7 +433,13 @@ function FlagSummary({ lead }: { lead: Lead }) {
   )
 }
 
-function LeadsTable({ leads }: { leads: Lead[] }) {
+function LeadsTable({
+  leads,
+  sheetsById,
+}: {
+  leads: Lead[]
+  sheetsById: Map<string, Sheet>
+}) {
   const router = useRouter()
   return (
     <div className="hidden overflow-hidden rounded-xl border md:block">
@@ -222,6 +448,7 @@ function LeadsTable({ leads }: { leads: Lead[] }) {
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
+            <TableHead>From</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Score</TableHead>
             <TableHead>Check</TableHead>
@@ -255,6 +482,9 @@ function LeadsTable({ leads }: { leads: Lead[] }) {
                   )}
                 </span>
               </TableCell>
+              <TableCell className="max-w-48">
+                <From lead={l} sheetsById={sheetsById} />
+              </TableCell>
               <TableCell>
                 <StatusBadge status={l.status} />
               </TableCell>
@@ -275,7 +505,13 @@ function LeadsTable({ leads }: { leads: Lead[] }) {
   )
 }
 
-function LeadCards({ leads }: { leads: Lead[] }) {
+function LeadCards({
+  leads,
+  sheetsById,
+}: {
+  leads: Lead[]
+  sheetsById: Map<string, Sheet>
+}) {
   return (
     <ul className="flex flex-col gap-2 md:hidden">
       {leads.map((l) => (
@@ -288,6 +524,15 @@ function LeadCards({ leads }: { leads: Lead[] }) {
               <p className="truncate font-medium">{l.name || "Unnamed"}</p>
               <p className="truncate text-sm text-muted-foreground">
                 {l.email || "No email"}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {[
+                  l.client,
+                  sheetsById.get(l.sheetIds[l.sheetIds.length - 1] ?? "")
+                    ?.title,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <StatusBadge status={l.status} />
