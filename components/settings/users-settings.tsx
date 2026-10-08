@@ -197,7 +197,9 @@ export function UsersSettings() {
           <p className="mt-1 text-sm text-muted-foreground">
             {users
               ? `${admins} ${admins === 1 ? "admin" : "admins"} · ${clients} ${clients === 1 ? "client" : "clients"}`
-              : "Loading…"}
+              : error
+                ? "Admins and clients"
+                : "Loading…"}
           </p>
         </div>
         <Button size="xl" onClick={() => setDialog({ kind: "add" })}>
