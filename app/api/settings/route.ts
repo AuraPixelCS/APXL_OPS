@@ -15,13 +15,11 @@ import {
 } from "@/lib/settings"
 
 export async function POST(req: Request) {
-  const admin = await verifyAdmin(req)
-  if (!admin) {
-    return NextResponse.json(
-      { error: "Sign in with an admin account to change settings." },
-      { status: 401 }
-    )
-  }
+  const admin = await verifyAdmin(
+    req,
+    "Sign in with an admin account to change settings."
+  )
+  if (admin instanceof Response) return admin
   const db = adminDb()
   if (!db) {
     return NextResponse.json(

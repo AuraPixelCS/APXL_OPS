@@ -30,7 +30,7 @@ export async function adminRoute(
   handler: (ctx: AdminRouteContext) => Promise<Response>
 ) {
   const admin = await verifyAdmin(req)
-  if (!admin) return fail("Sign in with an admin account to do this.", 401)
+  if (admin instanceof Response) return admin
   const auth = adminAuth()
   const db = adminDb()
   if (!auth || !db)

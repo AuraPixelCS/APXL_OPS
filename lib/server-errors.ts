@@ -9,7 +9,7 @@ export function databaseErrorResponse(err: unknown) {
   // (lib/firebase/admin.ts); locally through gcloud's default credentials.
   if (process.env.VERCEL) {
     if (
-      /OIDC|sts\.googleapis|iamcredentials|impersonat|invalid_target|unauthorized_client|Unable to|default credentials/i.test(
+      /OIDC|access token|invalid-credential|sts\.googleapis|iamcredentials|impersonat|invalid_target|unauthorized_client|default credentials/i.test(
         message
       )
     ) {

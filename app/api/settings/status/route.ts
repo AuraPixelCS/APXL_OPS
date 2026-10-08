@@ -13,12 +13,8 @@ export interface ConnectionStatus {
 }
 
 export async function POST(req: Request) {
-  if (!(await verifyAdmin(req))) {
-    return NextResponse.json(
-      { error: "Sign in with an admin account." },
-      { status: 401 }
-    )
-  }
+  const admin = await verifyAdmin(req, "Sign in with an admin account.")
+  if (admin instanceof Response) return admin
   const status: ConnectionStatus = {
     database: {
       projectId:
