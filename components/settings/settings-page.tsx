@@ -23,7 +23,7 @@ export function SettingsPage() {
         <div className="sticky top-14 z-10 border-b bg-background/90 page-x backdrop-blur-md">
           <TabsList
             variant="underline"
-            className="max-w-full [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
+            className="max-w-full [scrollbar-width:none] justify-start overflow-x-auto [&::-webkit-scrollbar]:hidden"
           >
             {TABS.map((t) => (
               <TabsTrigger
