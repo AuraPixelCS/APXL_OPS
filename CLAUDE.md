@@ -1,0 +1,137 @@
+@AGENTS.md
+
+# AuraPixel Ops (ap-ops)
+
+AuraPixel's internal operations panel, served at aurapixel.live/ops. First job:
+the lead pipeline. Leads come in (CSV import now, Meta via n8n later), get
+emailed, an AI assistant drafts replies that Mandy approves, and everything is
+reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
+`Projects/AuraPixel/ap-ops.md` first.
+
+## Stack (chosen by Mandy, follow it exactly)
+
+- Next.js 16.4 App Router, TypeScript, Tailwind v4, Firebase (Auth + Firestore).
+- **UI = Shark UI** (shadcn-style components on Ark UI, registry
+  `@shark` → `https://shark-ui.com/r/{name}.json`; the old `shark.vini.one` URL
+  308-redirects). Add components with `npx shadcn@latest add @shark/<name>`.
+  Ark callbacks pass detail objects: `onValueChange={(d) => d.value}`,
+  `onOpenChange={(d) => d.open}`, `onFileAccept={(d) => d.files}`.
+  `components/ui/**` and `hooks/use-is-mobile.tsx` are vendored: don't restyle
+  them; they're excluded from lint. Some Shark parts ship bare (SegmentGroup):
+  style them once in a wrapper (`components/common/filter-tabs.tsx`).
+- **Icons: lucide-react only.** No emoji as icons.
+- **Dark only, AuraPixel blue.** Tokens in `app/globals.css` (`:root`, and
+  `<html class="dark">` is always on). Brand `#0272e2` / bright `#0094ff` / deep
+  `#0b49c4`, shared with every AuraPixel project; surfaces match PXL Booth's dark
+  mode. Use tokens (`bg-primary`, `text-muted-foreground`), never raw hex. Small
+  blue text uses `text-brand-bright` or `text-info`: plain `#0272e2` on the dark
+  background is under 4.5:1. `shadcn add` may append a `.dark {}` block to
+  globals.css that overrides our status colours: delete it.
+- **Layout:** edge-to-edge, `page-x` utility for gutters, no centred max-width
+  page containers. Mobile-first, touch targets ≥ 40–44px (buttons `size="lg"/"xl"`).
+- Code style: Prettier config from PXL Booth (no semicolons, double quotes).
+
+## Next 16.4 specifics (Cache Components + Partial Prefetching are on)
+
+- Read `node_modules/next/dist/docs/` before using an API you haven't checked.
+- `useParams` / `usePathname` / `useSearchParams` suspend on routes with
+  request-time params: wrap in `<Suspense>` (see `app/(app)/layout.tsx`,
+  `app/(app)/leads/[id]/page.tsx`, `app/login/page.tsx`).
+- Every page under `app/(app)/` must `export const instant = false`. The auth gate
+  only resolves in the browser, so the page never renders during prerendering
+  and dev logs a "dropped segment" error otherwise. A layout-level `instant`
+  does NOT silence it; it has to be on the page.
+- Client component state survives navigation (React `<Activity>`); reset local
+  state in handlers when leaving a flow (see `Done` in the import page).
+
+## Data and security
+
+- Browser READS Firestore directly (live `onSnapshot` in `hooks/use-leads.ts`);
+  `firestore.rules` allows reads to the `admin` custom claim only and denies all
+  browser writes. Every WRITE goes through an API route using the Admin SDK
+  (`lib/firebase/admin.ts`) behind `verifyAdmin()`.
+- `lib/leads/clean.ts` is the single lead-cleaning implementation, shared by the
+  import preview (browser) and `POST /api/leads/import` (server re-cleans raw
+  rows). Tests: `npm test` (`scripts/test-clean.ts`, plain Node type stripping;
+  `allowImportingTsExtensions` is on for that).
+- Lead IDs are sha256 of `email:<addr>` (else `phone:<digits>`), so re-imports
+  never duplicate people; existing leads are never overwritten by an import.
+- **Settings** (`/settings`): `lib/settings.ts` is the single source for sections
+  (email, assistant, scoring), their starting values and validation; the form
+  (`components/settings/use-settings-form.ts`, edits-over-live-values, no effects)
+  and `POST /api/settings` run the same `validateSettings`. Stored at
+  `settings/{section}`. Secrets never go in settings: `POST /api/settings/status`
+  only reports whether `ANTHROPIC_API_KEY` / `N8N_WEBHOOK_URL` + `OPS_WEBHOOK_SECRET`
+  are set.
+- **Roles** (`lib/roles.ts`): custom claims. Admin = `{admin: true, role: "admin"}`
+  (firestore.rules checks `admin`); client = `{role: "client"}`. Clients sign in to a
+  "client area is being set up" screen in `AuthGate`; they can read nothing in Firestore
+  and every API refuses them. What clients will actually see is still to be decided.
+- **Users** (Settings → Users, `/api/users/{list,create,update,set-password,reset-link,delete}`
+  via `lib/admin-route.ts`): Firebase Auth is the source of truth; `users/{uid}` holds
+  profile extras (business name, createdBy). Guards on the server: you can't delete,
+  suspend or change the role of yourself, and nobody can remove the last active admin.
+  Role changes, suspensions and other people's password changes revoke their sessions.
+  `verifyAdmin` checks revocation (`verifyIdToken(token, true)`). Generated passwords:
+  `lib/users.ts#generatePassword`, shown once in the credentials dialog. When admins
+  change their own password the UI signs them straight back in, so the session survives.
+- Next 16.4 keeps pages alive between visits (`<Activity>`), so a revisited live list
+  shows the old rows for about 200 ms before the Firestore listener catches up. Tests
+  must wait for the list to settle.
+- `firebase-admin@14` needs the `jose` v5 override in package.json or Admin SDK
+  routes 500 on Vercel (same as PXL Booth). Keep it.
+
+## Running locally
+
+```bash
+npm run dev         # http://localhost:3100/ops → the real project aurapixel-ops (.env.local)
+```
+
+There is no emulator, test login or sample data any more (removed 2026-10-07 at
+Mandy's request: "delete all the mocks"). Everything runs against the real database.
+For automated checks, create a temporary `*@aurapixel.test` admin with the Admin SDK,
+and delete it and everything it created afterwards (never touch real accounts).
+
+### The real project: aurapixel-ops
+
+- Created by Mandy 2026-10-07 under **aurapixelcreativestudio@gmail.com** (gcloud's
+  account on this Mac; we're Owner). Spark plan. Firestore `(default)` in
+  **asia-southeast1**. Web app "AuraPixel Ops" registered; its public config is in `.env.local`.
+- **Rules:** `npm run deploy:rules` publishes `firestore.rules` through the Rules API
+  with the gcloud token (the firebase CLI here defaults to an unrelated account).
+  `scripts/gcloud-api.mjs` refuses RSVP / pxlchat / PXL Booth projects.
+- **Admins:** `npm run grant-admin -- email@x` sets `{admin: true, role: "admin"}`
+  through the Identity Toolkit API. The user must already exist and must sign in again.
+- **Sign-in setup:** `npm run setup:signin` (Mandy runs it in her Terminal; `-- --check`
+  is read-only). It switches on Email/Password with
+  `firebase.googleapis.com/v1alpha/firebase:provisionFirebaseApp`
+  (`firebaseAuthInput.emailAuthProviderMode`), the path `firebase deploy --only auth` uses.
+  `identityPlatform:initializeAuth` fails on Spark with BILLING_NOT_ENABLED. The script also
+  adds authorised domains, creates the admin with a hidden password prompt, and test-signs-in.
+- **Server credentials:** the org enforces `iam.disableServiceAccountKeyCreation`, so no
+  key files. Locally the Admin SDK uses Application Default Credentials
+  (`gcloud auth application-default login`, as aurapixelcreativestudio) with
+  `GOOGLE_CLOUD_QUOTA_PROJECT=aurapixel-ops`. Missing ADC → API routes return a 503
+  saying what to run (`lib/server-errors.ts`). On Vercel the Admin SDK signs in with
+  keyless **Workload Identity Federation**: Vercel's per-request OIDC token (`@vercel/oidc`,
+  team issuer `https://oidc.vercel.com/aurapixelcs-projects`) is traded for the
+  `ops-server@aurapixel-ops` service account (roles: datastore.user, firebaseauth.admin).
+  Only `owner:aurapixelcs-projects:project:apxl-ops:environment:production` is trusted, so
+  preview deployments can't reach the database. Google side: `npm run setup:vercel-access`
+  (Mandy runs it; the auto-mode classifier blocks IAM grants). Vercel env:
+  `GCP_WORKLOAD_IDENTITY_PROVIDER` + `GCP_SERVICE_ACCOUNT_EMAIL`. firebase-admin's
+  `getFirestore()` rejects custom credentials, so `adminDb()` builds the Firestore client
+  itself with `authClient` (`preferRest: true` for faster cold starts).
+- Never put these rules into `aurapixel-rsvp`: rules are project-wide.
+
+Real Meta exports contain real people's data: test with them in place, never commit
+them. (`openjdk@21` was installed only for the removed emulator; it can be uninstalled.)
+A verification build beside the dev servers: `OPS_DIST_DIR=.next-build npx next build`.
+
+## Deploying
+
+Git push to `main` on `AuraPixelCS/apxl-ops` deploys to production (Vercel project
+`apxl-ops` in aurapixelcs-projects, region sin1 next to Firestore). The landing page
+(`../landing-page/next.config.ts`) rewrites `/ops` and `/ops/:path*` to
+`https://apxl-ops.vercel.app/ops…`. CLI work needs the AuraPixel token and scope:
+`--scope aurapixelcs-projects --token="$(cat ~/.config/aurapixel/vercel-token)"`.

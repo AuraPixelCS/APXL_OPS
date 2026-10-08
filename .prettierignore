@@ -1,0 +1,3 @@
+components/ui/**
+node_modules
+.next

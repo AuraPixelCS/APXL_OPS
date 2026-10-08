@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AuraPixel Ops
 
-## Getting Started
+AuraPixel's internal operations panel, at aurapixel.live/ops. It starts with
+leads: import a CSV, see every lead cleaned and checked, and (next) follow the
+email conversation the assistant has with each one.
 
-First, run the development server:
+Built with Next.js 16, Shark UI, lucide icons and Firebase. Dark theme in
+AuraPixel blue.
+
+## Run it on your Mac
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev          # http://localhost:3100/ops
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sign in with your own account. Everything is real data in the `aurapixel-ops`
+Firebase project. The server needs Google access on your Mac once:
+`gcloud auth application-default login` (as aurapixelcreativestudio@gmail.com).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Live site
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+https://aurapixel.live/ops. Pushing to `main` on
+[AuraPixelCS/apxl-ops](https://github.com/AuraPixelCS/apxl-ops) deploys it
+automatically (Vercel project `apxl-ops`, team aurapixelcs-projects). The landing
+page proxies `/ops` to `apxl-ops.vercel.app/ops`.
 
-## Learn More
+## Commands
 
-To learn more about Next.js, take a look at the following resources:
+| Command | What it does |
+|---|---|
+| `npm run dev` | The app on the real database, http://localhost:3100/ops |
+| `npm run setup:signin` | One-time: switch on sign-in for the real project and create your admin login |
+| `npm run grant-admin -- you@example.com` | Gives an existing account admin access (real project) |
+| `npm run deploy:rules` | Publishes the database security rules (real project) |
+| `npm run setup:vercel-access` | One-time: lets the Vercel deployment use the database without a key file (`-- --check` to look only) |
+| `npm test` | Tests the lead-cleaning rules. Add a CSV path to summarise a file |
+| `npm run typecheck` / `npm run lint` | Code checks |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## What's built
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Sign-in with Firebase: **admins** get all of Ops; **clients** get their own screen and no access to admin data
+- **Leads**: live list with counts, filters (not contacted, needs a look, can't
+  email), search, and a card layout on phones
+- **Import CSV**: Meta exports (UTF-16) and Google Sheets CSVs, a cleaned preview
+  with what needs a look, duplicates skipped across files
+- **Lead page**: contact details, what's worth checking, the original form answers,
+  and the space where the email conversation will appear
+- **Settings → Users**: add admins and clients, edit them, change roles, set or generate
+  passwords, email or copy a reset link, suspend or restore access, delete
+- **Settings**: the sender and intro email (with a live preview), what the assistant
+  knows and how it writes, what makes a lead hot / warm / cold, and a Connections
+  tab showing which accounts and keys are still missing
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next: the email flow with n8n (`../pxl-auto`) and the assistant's draft replies.

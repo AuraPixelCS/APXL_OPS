@@ -1,26 +1,171 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --color-background: var(--background);
+  --color-brand: var(--brand);
+  --color-brand-bright: var(--brand-bright);
+  --color-brand-deep: var(--brand-deep);
+  --font-sans: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  --font-heading: var(--font-heading, ui-sans-serif, system-ui, sans-serif);
+  --font-mono: var(--font-mono, ui-monospace, monospace);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning: var(--warning);
+  --color-success-foreground: var(--success-foreground);
+  --color-success: var(--success);
+  --color-info-foreground: var(--info-foreground);
+  --color-info: var(--info);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-indeterminate: indeterminate 1.5s ease-in-out infinite;
+  @keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+    }
+  100% {
+    transform: translateX(400%);
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ---------------------------------------------------------------------------
+   AuraPixel Ops theme: dark only, AuraPixel blue.
+   Brand tokens are sampled from the AuraPixel logo (bright azure apex to deep
+   royal-blue legs) and are shared across every AuraPixel project. Surfaces use
+   the same near-black navy as PXL Booth's dark mode so the apps feel related.
+   The <html> element always carries `.dark`, so Shark's dark: variants apply.
+   Components use the tokens (bg-primary, text-muted-foreground), never hex.
+--------------------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+  --radius: 0.75rem;
+
+  --brand: #0272e2;
+  --brand-bright: #0094ff;
+  --brand-deep: #0b49c4;
+  --brand-gradient: linear-gradient(180deg, #0094ff 0%, #0272e2 50%, #0b49c4 100%);
+
+  --background: #070b14;
+  --foreground: #e8eefb;
+  --card: #0d1322;
+  --card-foreground: #e8eefb;
+  --popover: #111a2c;
+  --popover-foreground: #e8eefb;
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+  --secondary: #172136;
+  --secondary-foreground: #dbe5f7;
+  --muted: #131c2e;
+  --muted-foreground: #8c9bb8;
+  --accent: #12234a;
+  --accent-foreground: #8fc4ff;
+  --destructive: #f04438;
+  --destructive-foreground: #fda29b;
+  --info: #3f9dff;
+  --info-foreground: #8fc4ff;
+  --success: #12b76a;
+  --success-foreground: #6ce9a6;
+  --warning: #f79009;
+  --warning-foreground: #fec84b;
+  --border: #1b2740;
+  --input: #23314f;
+  --ring: #3f9dff;
+  --sidebar: #0a0f1c;
+  --sidebar-foreground: #a9b6cf;
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #12234a;
+  --sidebar-accent-foreground: #8fc4ff;
+  --sidebar-border: #182238;
+  --sidebar-ring: #3f9dff;
+  --chart-1: #3f9dff;
+  --chart-2: #0b49c4;
+  --chart-3: #a78bfa;
+  --chart-4: #34d399;
+  --chart-5: #fbbf24;
+}
+
+@layer base {
+  ::selection {
+    @apply bg-primary/80 text-primary-foreground;
+  }
+  * {
+    @apply border-border outline-ring/50 ring-ring;
+  }
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-background text-foreground flex min-h-svh flex-col font-sans;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  input[type="date"] {
+    color-scheme: dark;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   App-level utilities
+--------------------------------------------------------------------------- */
+@utility page-x {
+  /* Edge-to-edge pages: gutter only, no max-width container. */
+  padding-inline: --spacing(4);
+  @media (width >= 40rem) {
+    padding-inline: --spacing(6);
+  }
+  @media (width >= 64rem) {
+    padding-inline: --spacing(8);
+  }
+}
+
+@utility brand-gradient {
+  background-image: var(--brand-gradient);
+}
+
+@utility brand-text {
+  background-image: var(--brand-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
 }
