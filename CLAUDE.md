@@ -122,6 +122,22 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   touch Leads. `POST /api/blasts/people/{add,remove}` (`addPerson`/`removePerson` in
   `lib/blasts/server.ts`): adding refuses an address already anywhere in the blast (409);
   removing the last one deletes the list unless it's the blast's only source.
+- **Client report** ("Report" in the blast page's top bar, Mandy 2026-10-09): an
+  AuraPixel-branded email for the client: people on the list, emailed, still to send,
+  delivered / bounced (and opened / clicked when the sending domain tracks them),
+  unsubscribed, and send rounds by Malaysia-time day. `lib/blasts/report.ts` (pure,
+  tested) builds and renders it, so the dialog preview, Save as PDF (prints a popup
+  copy) and the sent email match. `lib/blasts/report-server.ts` reads what happened to
+  each email from the Resend account it went out through: Resend has no per-blast
+  query, so it pages `GET /emails` (newest first, `after` = older, 100 a page, 10 req/s)
+  back to the blast's first send and matches the stored `resendId`s by `last_event`
+  (one event per email, so a re-open after a click counts as opened only). A
+  sending-only key can't read this, so the report falls back to Ops' own counts.
+  Opens/clicks need tracking on the DOMAIN in that Resend account, and that needs a
+  tracking CNAME in the client's DNS, so Ops can't switch it on; the dialog says when
+  they aren't tracked. Reports always go from AuraPixel's own account and sender
+  (Settings → Email), reply-to the admin, optional copy and CSV of everyone with their
+  status; `blasts/{id}.lastReport` remembers who it went to.
 - **No explanatory copy on the blast screens** (Mandy, 2026-10-09): no page intros, card
   descriptions or field hints. Labels, counts, errors and warnings only.
 - **Custom designs** (`email.design: "standard" | "custom"`, `email.html`): a client's own

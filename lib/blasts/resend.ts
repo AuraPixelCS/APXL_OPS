@@ -14,12 +14,15 @@ export function isEmailConfigured(): boolean {
 export interface OutgoingEmail {
   from: string
   to: string[]
+  bcc?: string[]
   subject: string
   html: string
   text: string
   reply_to?: string[]
   headers?: Record<string, string>
   tags?: { name: string; value: string }[]
+  /** `content` is base64. */
+  attachments?: { filename: string; content: string; content_type?: string }[]
 }
 
 type ResendError = { statusCode?: number; name?: string; message?: string }

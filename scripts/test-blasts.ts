@@ -29,6 +29,15 @@ import {
   canSelect,
   countByStatus,
 } from "../lib/blasts/recipients.ts"
+import {
+  buildReport,
+  deliveryOf,
+  parseReportTo,
+  parseResendTime,
+  percent,
+  renderReport,
+  reportCsv,
+} from "../lib/blasts/report.ts"
 
 let passed = 0
 const ok = (cond: unknown, msg: string, detail?: unknown) => {
@@ -522,6 +531,178 @@ ok(
   validateBlastEmail({ ...base, clientId: "Ab12Cd34Ef56Gh78" }).ok &&
     !validateBlastEmail({ ...base, clientId: "../secrets" }).ok,
   "a blast's client tag must be a plain id"
+)
+
+// ── Client report ──────────────────────────────────────────────────────────
+ok(
+  parseResendTime("2026-10-09 15:46:56.073000+00")?.toISOString() ===
+    "2026-10-09T15:46:56.073Z" &&
+    parseResendTime("2026-10-09T15:46:56Z")?.toISOString() ===
+      "2026-10-09T15:46:56.000Z" &&
+    parseResendTime("yesterday") === null,
+  "Resend's timestamps parse, microseconds and all"
+)
+ok(
+  deliveryOf("clicked") === "clicked" &&
+    deliveryOf("suppressed") === "bounced" &&
+    deliveryOf("delivery_delayed") === "pending" &&
+    deliveryOf(undefined) === "unknown",
+  "Resend's last event maps to what happened to the email"
+)
+const at = (iso: string) => new Date(iso)
+const reportInput = {
+  blastName: "ThinkTx EDM",
+  campaign: "Budget 2027 & you",
+  client: "ThinkTx",
+  fromName: "ThinkTx",
+  fromEmail: "info@thinktx.my",
+  audience: ["a", "b", "c", "d", "e", "f", "g"].map((x) => ({
+    email: `${x}@x.co`,
+    name: x === "a" ? "=HYPERLINK(1)" : "",
+  })),
+  recipients: [
+    // 15:00 UTC is 11pm on 8 Oct in Malaysia; 16:30 UTC (still 8 Oct in UTC) is 12:30am on 9 Oct.
+    {
+      email: "a@x.co",
+      status: "sent",
+      sentAt: at("2026-10-08T15:00:00Z"),
+      resendId: "r1",
+    },
+    {
+      email: "b@x.co",
+      status: "sent",
+      sentAt: at("2026-10-08T15:00:01Z"),
+      resendId: "r2",
+    },
+    {
+      email: "c@x.co",
+      status: "sent",
+      sentAt: at("2026-10-08T16:30:00Z"),
+      resendId: "r3",
+    },
+    {
+      email: "d@x.co",
+      status: "sent",
+      sentAt: at("2026-10-08T16:30:01Z"),
+      resendId: "r4",
+      unsubscribedAt: at("2026-10-09T02:00:00Z"),
+    },
+    { email: "e@x.co", status: "failed", sentAt: null, resendId: null },
+    // Emailed, then their file was taken out of the blast.
+    {
+      email: "gone@x.co",
+      status: "sent",
+      sentAt: at("2026-10-08T16:30:02Z"),
+      resendId: "r5",
+    },
+  ].map((r) => ({ name: "", unsubscribedAt: null, ...r })) as Parameters<
+    typeof buildReport
+  >[0]["recipients"],
+  unsubscribed: new Set(["d@x.co", "f@x.co"]),
+  events: new Map([
+    ["r1", "clicked"],
+    ["r2", "opened"],
+    ["r3", "bounced"],
+    ["r4", "delivered"],
+  ]),
+  tracking: { opens: true, clicks: true },
+  now: at("2026-10-10T04:00:00Z"),
+}
+const { report: rep, rows: repRows } = buildReport(reportInput)
+ok(
+  rep.people === 8 && rep.sent === 5 && rep.toSend === 2 && rep.skipped === 1,
+  "the list adds up: emailed + still to send + opted out earlier",
+  JSON.stringify(rep)
+)
+ok(
+  rep.unsubscribed === 1 &&
+    rep.delivery?.checked === 4 &&
+    rep.delivery.delivered === 3 &&
+    rep.delivery.opened === 2 &&
+    rep.delivery.clicked === 1 &&
+    rep.delivery.bounced === 1,
+  "delivered counts opened and clicked; an email Resend didn't report isn't counted",
+  JSON.stringify(rep.delivery)
+)
+ok(
+  rep.rounds.length === 2 &&
+    rep.rounds[0].sent === 2 &&
+    rep.rounds[1].sent === 3 &&
+    /8 Oct/.test(rep.rounds[0].day) &&
+    /9 Oct/.test(rep.rounds[1].day),
+  "send rounds are Malaysia-time days",
+  JSON.stringify(rep.rounds)
+)
+ok(
+  percent(3, 4) === "75%" && percent(1, 3) === "33.3%" && percent(1, 0) === "",
+  "percentages round to one place, and skip dividing by nothing"
+)
+const out = renderReport(rep, {
+  note: "Hi team,\n\nHere's <your> report.",
+  logoSrc: "https://www.aurapixel.live/ops/report-logo.png",
+  signature: "The AuraPixel team",
+})
+ok(
+  out.subject === "Email campaign report: Budget 2027 & you" &&
+    out.html.includes("Budget 2027 &amp; you") &&
+    out.html.includes("Prepared for ThinkTx") &&
+    out.html.includes("Here&#39;s &lt;your&gt; report.") &&
+    out.html.includes('alt="AuraPixel"') &&
+    out.html.includes(">Opened<") &&
+    out.html.includes(">Clicked<") &&
+    !out.html.includes("<your>"),
+  "the report escapes the note and names, and is AuraPixel-branded"
+)
+ok(
+  out.text.includes("Emails sent: 5") &&
+    out.text.includes("Delivered: 3 (75%)") &&
+    out.text.includes("Prepared by AuraPixel"),
+  "the report has a plain-text version",
+  out.text
+)
+const untracked = renderReport(
+  buildReport({
+    ...reportInput,
+    events: new Map([["r4", "delivered"]]),
+    tracking: { opens: false, clicks: false },
+  }).report,
+  { note: "", logoSrc: "x", signature: "" }
+)
+ok(
+  !untracked.html.includes(">Opened<") &&
+    !untracked.html.includes(">Clicked<") &&
+    untracked.html.includes(">Delivered<"),
+  "opens and clicks are left out when the domain doesn't track them"
+)
+const blind = buildReport({ ...reportInput, events: null }).report
+ok(
+  blind.delivery === null &&
+    renderReport(blind, {
+      note: "",
+      logoSrc: "x",
+      signature: "",
+    }).html.includes(">Still to send<"),
+  "without Resend's side, the report shows only what Ops knows"
+)
+const csv = reportCsv(repRows)
+ok(
+  csv.startsWith("Email,Name,Status,Sent (Malaysia time)\r\n") &&
+    csv.includes("a@x.co,'=HYPERLINK(1),Clicked,") &&
+    csv.includes("d@x.co,,Unsubscribed,") &&
+    csv.includes("e@x.co,,Not sent yet,") &&
+    csv.includes("f@x.co,,Opted out earlier,") &&
+    csv.includes("c@x.co,,Bounced,"),
+  "the CSV lists everyone with what happened, and can't run formulas",
+  csv
+)
+const toOk = parseReportTo("Boss@Client.com, ops@client.com;boss@client.com")
+const toBad = parseReportTo("boss@client.com, nope")
+ok(
+  toOk.ok &&
+    toOk.to.join() === "boss@client.com,ops@client.com" &&
+    !toBad.ok &&
+    !parseReportTo(" ").ok,
+  "report addresses are split, tidied and checked"
 )
 
 console.log(`blasts: ${passed} checks passed`)

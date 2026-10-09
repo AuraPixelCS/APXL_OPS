@@ -9,6 +9,11 @@ export function bannerUrl(id: string, origin = OPS_PUBLIC_ORIGIN): string {
   return id ? `${origin}${BASE_PATH}/api/blasts/banner/${id}` : ""
 }
 
+/** AuraPixel's logo for the client report (public/report-logo.png). */
+export function reportLogoUrl(origin = OPS_PUBLIC_ORIGIN): string {
+  return `${origin}${BASE_PATH}/report-logo.png`
+}
+
 function unsubscribeQuery(blastId: string, email: string, token: string) {
   return new URLSearchParams({ b: blastId, e: email, t: token }).toString()
 }

@@ -19,6 +19,8 @@ export interface Blast {
   /** Emails delivered to Resend so far (never goes down). */
   sentCount: number
   lastSentAt: Date | null
+  /** The last report emailed to the client (Report on the blast page). */
+  lastReport: { to: string[]; sentAt: Date | null; by: string } | null
   createdBy: string | null
   createdAt: Date | null
   updatedBy: string | null

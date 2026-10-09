@@ -4,6 +4,7 @@
 
 import {
   ArrowLeftIcon,
+  FileChartColumnIcon,
   FileUpIcon,
   ListChecksIcon,
   MailIcon,
@@ -19,6 +20,7 @@ import { AddPersonDialog } from "@/components/blasts/add-person-dialog"
 import { EmailTab } from "@/components/blasts/email-tab"
 import { ListUpload, type PickedList } from "@/components/blasts/list-upload"
 import { RecipientsTab } from "@/components/blasts/recipients-tab"
+import { ReportDialog } from "@/components/blasts/report-dialog"
 import { SheetPicker } from "@/components/blasts/sheet-picker"
 import { useBlastEmailForm } from "@/components/blasts/use-blast-email-form"
 import { ConfirmDialog, DialogShell } from "@/components/common/dialog-shell"
@@ -54,7 +56,7 @@ import type { Blast, BlastList } from "@/lib/blasts/types"
 import type { Sheet } from "@/lib/leads/sheets"
 
 type Tab = "recipients" | "email"
-type Dialog = "rename" | "audience" | "person" | "delete" | null
+type Dialog = "rename" | "audience" | "person" | "report" | "delete" | null
 
 const SHOWN_SHEETS = 4
 
@@ -132,7 +134,22 @@ export function BlastPage() {
   return (
     <AppShell
       title={blast?.name ?? "Email blast"}
-      actions={blast && <BlastMenu onPick={setDialog} />}
+      actions={
+        blast && (
+          <>
+            <Button
+              variant="outline"
+              size="xl"
+              className="max-sm:size-10 max-sm:px-0"
+              onClick={() => setDialog("report")}
+            >
+              <FileChartColumnIcon />
+              <span className="max-sm:sr-only">Report</span>
+            </Button>
+            <BlastMenu onPick={setDialog} />
+          </>
+        )
+      }
     >
       <div className="flex flex-col gap-5 page-x pt-4 pb-5 sm:pt-5">
         <div className="flex flex-col gap-2">
@@ -305,6 +322,9 @@ export function BlastPage() {
       )}
       {blast && dialog === "person" && (
         <AddPersonDialog blast={blast} onClose={() => setDialog(null)} />
+      )}
+      {blast && dialog === "report" && (
+        <ReportDialog blast={blast} onClose={() => setDialog(null)} />
       )}
       {blast && dialog === "delete" && (
         <DeleteDialog blast={blast} onClose={() => setDialog(null)} />

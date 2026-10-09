@@ -41,6 +41,13 @@ export function toBlast(id: string, d: DocumentData): Blast {
     email: { ...EMPTY_EMAIL, ...(d.email ?? {}) },
     sentCount: d.sentCount ?? 0,
     lastSentAt: toDate(d.lastSentAt),
+    lastReport: d.lastReport
+      ? {
+          to: Array.isArray(d.lastReport.to) ? d.lastReport.to : [],
+          sentAt: toDate(d.lastReport.sentAt),
+          by: d.lastReport.by ?? "",
+        }
+      : null,
     createdBy: d.createdBy ?? null,
     createdAt: toDate(d.createdAt),
     updatedBy: d.updatedBy ?? null,

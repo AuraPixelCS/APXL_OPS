@@ -56,7 +56,9 @@ page proxies `/ops` to `apxl-ops.vercel.app/ops`.
   every link editable, e.g. a redirect for the button), check the live preview and send a
   test, then send in rounds: pick the next
   100 not-sent people and send. Tracks who was sent, who failed and who unsubscribed;
-  every email has a working Unsubscribe link
+  every email has a working Unsubscribe link. **Report** (top right of a blast) emails the
+  client an AuraPixel-branded report (sent, delivered, bounced, opened and clicked where
+  tracked, unsubscribed, send rounds), with an optional CSV of everyone, or saves it as a PDF
 - **Settings → Users**: add admins and clients, edit them, change roles, set or generate
   passwords, email or copy a reset link, suspend or restore access, delete
 - **Settings**: the sender and intro email (with a live preview), what the assistant
