@@ -16,8 +16,10 @@ import {
 import * as React from "react"
 import { toDate, toLead } from "@/hooks/use-leads"
 import { type BlastEmail, defaultBlastEmail } from "@/lib/blasts/email"
+import type { AudienceLead } from "@/lib/blasts/recipients"
 import {
   type Blast,
+  type BlastList,
   type BlastRecipient,
   MAX_BLAST_SHEETS,
 } from "@/lib/blasts/types"
@@ -35,6 +37,7 @@ export function toBlast(id: string, d: DocumentData): Blast {
     id,
     name: d.name ?? "Untitled blast",
     sheetIds: Array.isArray(d.sheetIds) ? d.sheetIds : [],
+    listIds: Array.isArray(d.listIds) ? d.listIds : [],
     email: { ...EMPTY_EMAIL, ...(d.email ?? {}) },
     sentCount: d.sentCount ?? 0,
     lastSentAt: toDate(d.lastSentAt),
@@ -180,6 +183,83 @@ export function useSheetLeads(sheetIds: string[]): Live<Lead[]> {
         (snap) => set(snap.docs.map((d) => toLead(d.id, d.data()))),
         (err) => fail(err.message)
       )
+    }
+  )
+}
+
+const NO_LISTS: BlastList[] = []
+/** Files uploaded just for this blast. */
+export function useBlastLists(blastId: string): Live<BlastList[]> {
+  return useLive(blastId ? `lists:${blastId}` : null, NO_LISTS, (set, fail) => {
+    const db = getClientDb()
+    if (!db) return
+    return onSnapshot(
+      query(collection(db, "blastLists"), where("blastId", "==", blastId)),
+      (snap) =>
+        set(
+          snap.docs.map((d) => {
+            const v = d.data()
+            return {
+              id: d.id,
+              blastId: v.blastId ?? blastId,
+              name: v.name ?? v.fileName ?? "Uploaded list",
+              fileName: v.fileName ?? "",
+              people: v.people ?? 0,
+              canEmail: v.canEmail ?? 0,
+              createdAt: toDate(v.createdAt),
+            }
+          })
+        ),
+      (err) => fail(err.message)
+    )
+  })
+}
+
+const NO_CONTACTS: AudienceLead[] = []
+/**
+ * The people in a blast's uploaded files, shaped like leads so the recipient
+ * list treats them the same. `sheetIds` holds the file's id, so the "sheet"
+ * filter and labels work for files too.
+ */
+export function useListContacts(listIds: string[]): Live<AudienceLead[]> {
+  const ids = [...new Set(listIds)].sort()
+  return useLive(
+    ids.length ? `contacts:${ids.join(",")}` : null,
+    NO_CONTACTS,
+    (set, fail) => {
+      const db = getClientDb()
+      if (!db) return
+      const parts = new Map<string, AudienceLead[]>()
+      const stops = ids.map((listId) =>
+        onSnapshot(
+          collection(db, "blastLists", listId, "contacts"),
+          (snap) => {
+            parts.set(
+              listId,
+              snap.docs.map((d) => {
+                const v = d.data()
+                // File order, so "the first 100" means the file's first 100.
+                const at =
+                  (toDate(v.createdAt)?.getTime() ?? 0) + (v.order ?? 0)
+                return {
+                  id: `list:${listId}:${d.id}`,
+                  email: v.email ?? "",
+                  emailOk: Boolean(v.emailOk),
+                  name: v.name ?? "",
+                  greetingName: v.greetingName ?? "there",
+                  sheetIds: [listId],
+                  client: "",
+                  createdAt: new Date(at),
+                }
+              })
+            )
+            if (parts.size === ids.length)
+              set(ids.flatMap((i) => parts.get(i) ?? []))
+          },
+          (err) => fail(err.message)
+        )
+      )
+      return () => stops.forEach((stop) => stop())
     }
   )
 }

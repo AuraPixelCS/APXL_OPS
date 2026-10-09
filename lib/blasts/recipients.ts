@@ -5,6 +5,19 @@ import { emailDocId } from "./email.ts"
 import type { BlastRecipient } from "@/lib/blasts/types"
 import type { Lead } from "@/lib/leads/types"
 
+/** What the recipient list needs from a lead, or from someone in an uploaded file. */
+export type AudienceLead = Pick<
+  Lead,
+  | "id"
+  | "email"
+  | "emailOk"
+  | "name"
+  | "greetingName"
+  | "sheetIds"
+  | "client"
+  | "createdAt"
+>
+
 export type RowStatus =
   "not_sent" | "sending" | "sent" | "failed" | "unsubscribed" | "cant_email"
 
@@ -39,7 +52,7 @@ export const canSelect = (r: RecipientRow) =>
   !r.outside && (r.status === "not_sent" || r.status === "failed")
 
 export function buildRows(
-  leads: Lead[],
+  leads: AudienceLead[],
   recipients: Map<string, BlastRecipient>,
   unsubscribed: Set<string>,
   now = Date.now()

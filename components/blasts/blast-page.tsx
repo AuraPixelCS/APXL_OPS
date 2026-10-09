@@ -4,6 +4,7 @@
 
 import {
   ArrowLeftIcon,
+  FileUpIcon,
   ListChecksIcon,
   MailIcon,
   MoreHorizontalIcon,
@@ -14,6 +15,7 @@ import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import * as React from "react"
 import { EmailTab } from "@/components/blasts/email-tab"
+import { ListUpload, type PickedList } from "@/components/blasts/list-upload"
 import { RecipientsTab } from "@/components/blasts/recipients-tab"
 import { SheetPicker } from "@/components/blasts/sheet-picker"
 import { useBlastEmailForm } from "@/components/blasts/use-blast-email-form"
@@ -37,6 +39,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/toast"
 import {
   useBlast,
+  useBlastLists,
+  useListContacts,
   useRecipients,
   useSheetLeads,
   useUnsubscribes,
@@ -44,10 +48,11 @@ import {
 import { useSheets } from "@/hooks/use-sheets"
 import { ApiError, apiPost } from "@/lib/api"
 import { buildRows, countByStatus } from "@/lib/blasts/recipients"
-import type { Blast } from "@/lib/blasts/types"
+import type { Blast, BlastList } from "@/lib/blasts/types"
+import type { Sheet } from "@/lib/leads/sheets"
 
 type Tab = "recipients" | "email"
-type Dialog = "rename" | "sheets" | "delete" | null
+type Dialog = "rename" | "audience" | "delete" | null
 
 const SHOWN_SHEETS = 4
 
@@ -60,7 +65,24 @@ export function BlastPage() {
     () => new Map(sheets.map((s) => [s.id, s])),
     [sheets]
   )
-  const audience = useSheetLeads(blast?.sheetIds ?? [])
+  const sheetLeads = useSheetLeads(blast?.sheetIds ?? [])
+  const contacts = useListContacts(blast?.listIds ?? [])
+  const { data: lists } = useBlastLists(id)
+  const audienceData = React.useMemo(
+    () => [...sheetLeads.data, ...contacts.data],
+    [sheetLeads.data, contacts.data]
+  )
+  const audience = {
+    data: audienceData,
+    loading: sheetLeads.loading || contacts.loading,
+  }
+  // Titles for sheets and uploaded files, for labels and the source filter.
+  const sources = React.useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of sheets) m.set(s.id, s.title)
+    for (const l of lists) m.set(l.id, `${l.name} (uploaded)`)
+    return m
+  }, [sheets, lists])
   const { data: recipients } = useRecipients(id)
   const { data: unsubscribed } = useUnsubscribes()
   const form = useBlastEmailForm(blast)
@@ -126,26 +148,44 @@ export function BlastPage() {
                 {blast.name}
               </h1>
               <div className="flex flex-wrap items-center gap-1.5">
-                {blast.sheetIds.slice(0, SHOWN_SHEETS).map((sid) => {
-                  const s = sheetsById.get(sid)
-                  return (
-                    <Badge key={sid} variant="outline" className="max-w-full">
-                      <span className="truncate">
-                        {s ? `${s.title} · ${s.client}` : "Deleted sheet"}
-                      </span>
+                {[
+                  ...blast.sheetIds.map((sid) => {
+                    const s = sheetsById.get(sid)
+                    return {
+                      id: sid,
+                      file: false,
+                      label: s ? `${s.title} · ${s.client}` : "Deleted sheet",
+                    }
+                  }),
+                  ...blast.listIds.map((lid) => ({
+                    id: lid,
+                    file: true,
+                    label:
+                      lists.find((l) => l.id === lid)?.name ?? "Uploaded file",
+                  })),
+                ]
+                  .slice(0, SHOWN_SHEETS)
+                  .map((c) => (
+                    <Badge key={c.id} variant="outline" className="max-w-full">
+                      {c.file && <FileUpIcon aria-label="Uploaded file" />}
+                      <span className="truncate">{c.label}</span>
                     </Badge>
-                  )
-                })}
-                {blast.sheetIds.length > SHOWN_SHEETS && (
+                  ))}
+                {blast.sheetIds.length + blast.listIds.length >
+                  SHOWN_SHEETS && (
                   <Badge variant="outline">
-                    +{blast.sheetIds.length - SHOWN_SHEETS} more
+                    +
+                    {blast.sheetIds.length +
+                      blast.listIds.length -
+                      SHOWN_SHEETS}{" "}
+                    more
                   </Badge>
                 )}
                 <Button
                   variant="ghost"
                   size="lg"
                   className="min-h-10 text-muted-foreground"
-                  onClick={() => setDialog("sheets")}
+                  onClick={() => setDialog("audience")}
                 >
                   Change
                 </Button>
@@ -223,7 +263,7 @@ export function BlastPage() {
                 rows={rows}
                 counts={counts}
                 loading={audience.loading}
-                sheetsById={sheetsById}
+                sources={sources}
                 form={form}
                 onEditEmail={() => setTab("email")}
               />
@@ -240,10 +280,11 @@ export function BlastPage() {
       {blast && dialog === "rename" && (
         <RenameDialog blast={blast} onClose={() => setDialog(null)} />
       )}
-      {blast && dialog === "sheets" && (
-        <SheetsDialog
+      {blast && dialog === "audience" && (
+        <AudienceDialog
           blast={blast}
           sheets={sheets}
+          lists={lists}
           onClose={() => setDialog(null)}
         />
       )}
@@ -267,9 +308,9 @@ function BlastMenu({ onPick }: { onPick: (d: Dialog) => void }) {
           <PencilIcon />
           Rename
         </MenuItem>
-        <MenuItem value="sheets">
+        <MenuItem value="audience">
           <ListChecksIcon />
-          Change sheets
+          Change who it goes to
         </MenuItem>
         <MenuSeparator />
         <MenuItem value="delete" variant="destructive">
@@ -335,39 +376,76 @@ export function RenameDialog({
   )
 }
 
-function SheetsDialog({
+function AudienceDialog({
   blast,
   sheets,
+  lists,
   onClose,
 }: {
   blast: Blast
-  sheets: Parameters<typeof SheetPicker>[0]["sheets"]
+  sheets: Sheet[]
+  lists: BlastList[]
   onClose: () => void
 }) {
   const [ids, setIds] = React.useState(
     blast.sheetIds.filter((id) => sheets.some((s) => s.id === id))
   )
+  const myLists = lists.filter((l) => blast.listIds.includes(l.id))
+  const [adding, setAdding] = React.useState(false)
+  const [newList, setNewList] = React.useState<PickedList | null>(null)
+  const [confirmRemove, setConfirmRemove] = React.useState<string | null>(null)
+  const [removing, setRemoving] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string>()
   const [busy, setBusy] = React.useState(false)
-  async function save() {
-    if (!ids.length) return setError("Pick at least one sheet.")
-    setBusy(true)
+
+  async function remove(listId: string) {
+    if (confirmRemove !== listId) return setConfirmRemove(listId)
+    setRemoving(listId)
+    setError(undefined)
     try {
-      await apiPost("/api/blasts/update", { id: blast.id, sheetIds: ids })
-      toast.success({ title: "Sheets updated" })
+      await apiPost("/api/blasts/lists/remove", { blastId: blast.id, listId })
+      toast.success({ title: "File removed from this blast" })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't remove it.")
+    } finally {
+      setRemoving(null)
+      setConfirmRemove(null)
+    }
+  }
+
+  async function save() {
+    if (!ids.length && !myLists.length && !newList)
+      return setError("Pick at least one sheet or upload a file.")
+    if (adding && !newList)
+      return setError("Choose a file, or close the upload.")
+    setBusy(true)
+    setError(undefined)
+    try {
+      if (newList)
+        await apiPost("/api/blasts/lists/add", {
+          blastId: blast.id,
+          list: newList,
+        })
+      const changed =
+        ids.length !== blast.sheetIds.length ||
+        ids.some((i) => !blast.sheetIds.includes(i))
+      if (changed)
+        await apiPost("/api/blasts/update", { id: blast.id, sheetIds: ids })
+      toast.success({ title: "Updated who it goes to" })
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save.")
       setBusy(false)
     }
   }
+
   return (
     <DialogShell
       open
       onClose={onClose}
-      title="Change sheets"
+      title="Who it goes to"
       size="xl"
-      description="Add a new month's sheet to keep sending from the same blast. Removing a sheet doesn't undo anything: people already sent to stay in the Sent list."
+      description="Add a new month's sheet or another file to keep sending from the same blast. Removing one doesn't undo anything: people already sent to stay in the Sent list."
       footer={
         <>
           <Button variant="outline" size="xl" onClick={onClose} disabled={busy}>
@@ -380,15 +458,77 @@ function SheetsDialog({
         </>
       }
     >
-      <SheetPicker
-        sheets={sheets}
-        value={ids}
-        onChange={(v) => {
-          setIds(v)
-          setError(undefined)
-        }}
-        error={error}
-      />
+      <section className="flex min-w-0 flex-col gap-3" aria-label="Sheets">
+        <h3 className="text-sm font-semibold">Your sheets</h3>
+        <SheetPicker
+          sheets={sheets}
+          value={ids}
+          onChange={(v) => {
+            setIds(v)
+            setError(undefined)
+          }}
+        />
+      </section>
+      <section
+        className="flex min-w-0 flex-col gap-3"
+        aria-label="Uploaded files"
+      >
+        <h3 className="text-sm font-semibold">Files uploaded for this blast</h3>
+        {myLists.length > 0 ? (
+          <ul className="flex flex-col divide-y rounded-xl border">
+            {myLists.map((l) => (
+              <li
+                key={l.id}
+                className="flex min-w-0 items-center gap-3 px-3 py-2"
+              >
+                <FileUpIcon
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm">{l.name}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {l.canEmail.toLocaleString()}{" "}
+                    {l.canEmail === 1 ? "person" : "people"} to email
+                  </span>
+                </span>
+                <Button
+                  variant={confirmRemove === l.id ? "destructive" : "ghost"}
+                  size="lg"
+                  className="min-h-10 shrink-0"
+                  disabled={removing !== null}
+                  onClick={() => void remove(l.id)}
+                >
+                  {removing === l.id ? <Spinner /> : <Trash2Icon />}
+                  {confirmRemove === l.id ? "Tap again to remove" : "Remove"}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          !adding && <p className="text-sm text-muted-foreground">None yet.</p>
+        )}
+        {adding ? (
+          <ListUpload
+            value={newList}
+            onChange={(v) => {
+              setNewList(v)
+              setError(undefined)
+            }}
+          />
+        ) : (
+          <Button
+            variant="outline"
+            size="xl"
+            className="self-start"
+            onClick={() => setAdding(true)}
+          >
+            <FileUpIcon />
+            Upload a file
+          </Button>
+        )}
+      </section>
+      {error && <p className="text-sm text-destructive-foreground">{error}</p>}
     </DialogShell>
   )
 }

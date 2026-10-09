@@ -85,7 +85,8 @@ export async function POST(req: Request) {
 
     const audience = await loadAudience(
       db,
-      (blastSnap.get("sheetIds") as string[]) ?? []
+      (blastSnap.get("sheetIds") as string[]) ?? [],
+      (blastSnap.get("listIds") as string[]) ?? []
     )
     const inBlast = requested.filter((e) => audience.has(e))
     const skipped = {

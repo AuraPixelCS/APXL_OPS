@@ -4,7 +4,6 @@
 
 import {
   ChevronRightIcon,
-  FileSpreadsheetIcon,
   MailIcon,
   MoreHorizontalIcon,
   PencilIcon,
@@ -16,9 +15,11 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import * as React from "react"
 import { DeleteDialog, RenameDialog } from "@/components/blasts/blast-page"
+import { ListUpload, type PickedList } from "@/components/blasts/list-upload"
 import { SheetPicker } from "@/components/blasts/sheet-picker"
 import { DialogShell } from "@/components/common/dialog-shell"
 import { EmptyState } from "@/components/common/empty-state"
+import { FilterTabs } from "@/components/common/filter-tabs"
 import { TextField } from "@/components/settings/form-bits"
 import { AppShell } from "@/components/shell/app-shell"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -57,6 +58,12 @@ function clientsOf(b: Blast, sheetsById: Map<string, Sheet>): string {
   const names = new Set(
     b.sheetIds.map((id) => sheetsById.get(id)?.client).filter(Boolean)
   )
+  if (b.listIds.length)
+    names.add(
+      b.listIds.length === 1
+        ? "Uploaded file"
+        : `${b.listIds.length} uploaded files`
+    )
   return [...names].join(", ")
 }
 
@@ -121,25 +128,12 @@ export function BlastsPage() {
             ))}
           </div>
         ) : blasts.length === 0 && !error ? (
-          sheets.length === 0 ? (
-            <EmptyState
-              icon={FileSpreadsheetIcon}
-              title="Import a sheet first"
-              body="A blast sends to the leads in your sheets. Import one, then come back to start a blast."
-              action={
-                <Button asChild size="xl">
-                  <Link href="/sheets/import">Import a sheet</Link>
-                </Button>
-              }
-            />
-          ) : (
-            <EmptyState
-              icon={MailIcon}
-              title="No blasts yet"
-              body="Start one, pick the sheets it goes to, write the email, then send it to as many people at a time as you like."
-              action={newButton("xl")}
-            />
-          )
+          <EmptyState
+            icon={MailIcon}
+            title="No blasts yet"
+            body="Start one, choose who it goes to (your imported sheets, or a file you upload just for it), write the email, then send it to as many people at a time as you like."
+            action={newButton("xl")}
+          />
         ) : (
           <>
             <div className="hidden overflow-hidden rounded-xl border md:block">
@@ -147,7 +141,7 @@ export function BlastsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Blast</TableHead>
-                    <TableHead>Sheets</TableHead>
+                    <TableHead>Goes to</TableHead>
                     <TableHead className="text-right">Sent</TableHead>
                     <TableHead className="text-right">Last sent</TableHead>
                     <TableHead className="w-14">
@@ -294,7 +288,14 @@ function BlastRow({
       <TableCell className="max-w-72">
         <span className="block truncate">{clients || "—"}</span>
         <span className="block text-xs text-muted-foreground">
-          {b.sheetIds.length} {b.sheetIds.length === 1 ? "sheet" : "sheets"}
+          {[
+            b.sheetIds.length &&
+              `${b.sheetIds.length} ${b.sheetIds.length === 1 ? "sheet" : "sheets"}`,
+            b.listIds.length &&
+              `${b.listIds.length} ${b.listIds.length === 1 ? "file" : "files"}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </span>
       </TableCell>
       <TableCell className="text-right tabular-nums">
@@ -313,6 +314,8 @@ function BlastRow({
   )
 }
 
+type Source = "sheets" | "file"
+
 function NewBlastDialog({
   sheets,
   defaultName,
@@ -324,35 +327,43 @@ function NewBlastDialog({
 }) {
   const router = useRouter()
   const [name, setName] = React.useState(defaultName)
+  // With no sheets imported yet, uploading a file is the only way in.
+  const [source, setSource] = React.useState<Source>(
+    sheets.length ? "sheets" : "file"
+  )
   const [sheetIds, setSheetIds] = React.useState<string[]>([])
+  const [list, setList] = React.useState<PickedList | null>(null)
   const [errors, setErrors] = React.useState<{
     name?: string
     sheetIds?: string
+    list?: string
   }>({})
   const [busy, setBusy] = React.useState(false)
 
   async function create() {
     const e: typeof errors = {}
     if (!name.trim()) e.name = "Give the blast a name."
-    if (!sheetIds.length) e.sheetIds = "Pick at least one sheet."
+    if (source === "sheets" && !sheetIds.length)
+      e.sheetIds = "Pick at least one sheet."
+    if (source === "file" && !list) e.list = "Choose a file of people first."
     setErrors(e)
     if (Object.keys(e).length) return
     setBusy(true)
     try {
-      const { id } = await apiPost<{ id: string }>("/api/blasts/create", {
-        name,
-        sheetIds,
-      })
+      const { id } = await apiPost<{ id: string }>(
+        "/api/blasts/create",
+        source === "sheets" ? { name, sheetIds } : { name, sheetIds: [], list }
+      )
       onClose()
       router.push(`/blasts/${id}?tab=email`)
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "Couldn't create it."
       setErrors(
         err instanceof ApiError && Object.keys(err.fields).length
           ? err.fields
-          : {
-              sheetIds:
-                err instanceof Error ? err.message : "Couldn't create it.",
-            }
+          : source === "sheets"
+            ? { sheetIds: msg }
+            : { list: msg }
       )
       setBusy(false)
     }
@@ -364,7 +375,7 @@ function NewBlastDialog({
       onClose={onClose}
       title="New email blast"
       size="xl"
-      description="Name it, pick who it goes to. You'll write the email next; nothing is sent until you press Send."
+      description="Name it and choose who it goes to. You'll write the email next; nothing is sent until you press Send."
       footer={
         <>
           <Button variant="outline" size="xl" onClick={onClose} disabled={busy}>
@@ -372,7 +383,7 @@ function NewBlastDialog({
           </Button>
           <Button size="xl" onClick={create} disabled={busy}>
             {busy && <Spinner />}
-            Create blast
+            {busy && source === "file" ? "Saving the list…" : "Create blast"}
           </Button>
         </>
       }
@@ -387,15 +398,41 @@ function NewBlastDialog({
         error={errors.name}
         helper="Only you and other admins see this."
       />
-      <SheetPicker
-        sheets={sheets}
-        value={sheetIds}
-        onChange={(ids) => {
-          setSheetIds(ids)
-          setErrors((e) => ({ ...e, sheetIds: undefined }))
-        }}
-        error={errors.sheetIds}
-      />
+      <div className="flex min-w-0 flex-col gap-3">
+        <p className="text-sm font-medium">Who&rsquo;s it for?</p>
+        <FilterTabs
+          value={source}
+          onChange={(v) => {
+            setSource(v)
+            setErrors((e) => ({ ...e, sheetIds: undefined, list: undefined }))
+          }}
+          label="Who it's for"
+          options={[
+            { value: "sheets", label: "From your sheets" },
+            { value: "file", label: "Upload a file" },
+          ]}
+        />
+        {source === "sheets" ? (
+          <SheetPicker
+            sheets={sheets}
+            value={sheetIds}
+            onChange={(ids) => {
+              setSheetIds(ids)
+              setErrors((e) => ({ ...e, sheetIds: undefined }))
+            }}
+            error={errors.sheetIds}
+          />
+        ) : (
+          <ListUpload
+            value={list}
+            onChange={(v) => {
+              setList(v)
+              setErrors((e) => ({ ...e, list: undefined }))
+            }}
+            error={errors.list}
+          />
+        )}
+      </div>
     </DialogShell>
   )
 }

@@ -93,6 +93,14 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   Idempotency-Key, then marks sent/failed. Account-level refusals (401/403/429/503: daily
   quota, bad key, unverified domain) RESTORE the claims so people stay "Not sent" instead
   of "Failed". Max 500 per request; the UI loops for bigger selections.
+- **Uploaded files for one blast** (`blastLists/{id}` + `contacts/{email}`): "Upload a
+  file" in New blast / "Who it goes to" reads CSV/Excel with the Sheets reader, then
+  `saveBlastList` cleans rows with `cleanLead` and stores one contact per address. They
+  NEVER go into `leads` or `imports`, so Leads and Sheets stay real leads only. A blast has
+  `sheetIds` and `listIds` (≤10); either may be empty but not both (the server refuses to
+  remove the last file when there are no sheets). `loadAudience` and the browser
+  (`useListContacts`, shaped as `AudienceLead` with `sheetIds: [listId]`) merge both, one
+  row per address. Deleting a blast deletes its files.
 - **Unsubscribe**: every email has an Unsubscribe link (`/unsubscribe?b&e&t`, public page
   outside the auth gate; nothing happens until the person presses the button, because
   link scanners open links) and `List-Unsubscribe` + `List-Unsubscribe-Post` one-click

@@ -49,7 +49,8 @@ page proxies `/ops` to `apxl-ops.vercel.app/ops`.
   earlier sheets, a cleaned preview, duplicates skipped per client
 - **Lead page**: contact details, what's worth checking, the original form answers,
   and the space where the email conversation will appear
-- **Email blasts**: pick sheets, write the email (sender, subject, banner, message,
+- **Email blasts**: pick sheets (or upload a file of people just for that blast; they stay
+  out of Leads), write the email (sender, subject, banner, message,
   button, footer) with a live preview and a test send, then send in rounds: pick the next
   100 not-sent people and send. Tracks who was sent, who failed and who unsubscribed;
   every email has a working Unsubscribe link

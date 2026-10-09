@@ -22,7 +22,11 @@ export async function POST(req: Request) {
       update.name = name.name
     }
     if (body.sheetIds !== undefined) {
-      const sheets = await checkSheetIds(db, body.sheetIds)
+      // No sheets is fine while the blast has an uploaded file.
+      const lists = ((await ref.get()).get("listIds") as string[]) ?? []
+      const sheets = await checkSheetIds(db, body.sheetIds, {
+        allowNone: lists.length > 0,
+      })
       if ("error" in sheets)
         return fail(sheets.error, 400, { sheetIds: sheets.error })
       update.sheetIds = sheets.sheetIds

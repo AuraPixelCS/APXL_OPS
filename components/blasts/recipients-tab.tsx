@@ -51,7 +51,6 @@ import {
 } from "@/lib/blasts/recipients"
 import { type Blast, MAX_SEND_PER_REQUEST } from "@/lib/blasts/types"
 import { formatDateTime, formatRelative } from "@/lib/format"
-import type { Sheet } from "@/lib/leads/sheets"
 import { cn } from "@/lib/utils"
 
 type Filter =
@@ -90,7 +89,7 @@ export function RecipientsTab({
   rows,
   counts,
   loading,
-  sheetsById,
+  sources,
   form,
   onEditEmail,
 }: {
@@ -98,7 +97,8 @@ export function RecipientsTab({
   rows: RecipientRow[]
   counts: Record<RowStatus, number>
   loading: boolean
-  sheetsById: Map<string, Sheet>
+  /** Sheet and uploaded-file titles by id. */
+  sources: Map<string, string>
   form: BlastEmailForm
   onEditEmail: () => void
 }) {
@@ -191,10 +191,10 @@ export function RecipientsTab({
           label="Show recipients"
         />
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          {blast.sheetIds.length > 1 && (
+          {blast.sheetIds.length + blast.listIds.length > 1 && (
             <SheetFilter
-              sheetIds={blast.sheetIds}
-              sheetsById={sheetsById}
+              sheetIds={[...blast.sheetIds, ...blast.listIds]}
+              sources={sources}
               value={sheetId}
               onChange={(v) => {
                 setSheetId(v)
@@ -336,7 +336,7 @@ export function RecipientsTab({
                       </TableCell>
                       <TableCell className="max-w-56 text-muted-foreground">
                         <span className="block truncate">
-                          {sheetLabel(r, sheetsById)}
+                          {sheetLabel(r, sources)}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -365,9 +365,7 @@ export function RecipientsTab({
                     </span>
                     <span className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                       <StatusCell row={r} />
-                      <span className="truncate">
-                        {sheetLabel(r, sheetsById)}
-                      </span>
+                      <span className="truncate">{sheetLabel(r, sources)}</span>
                     </span>
                   </span>
                 </>
@@ -481,11 +479,11 @@ export function RecipientsTab({
   )
 }
 
-function sheetLabel(r: RecipientRow, sheetsById: Map<string, Sheet>): string {
-  if (r.outside) return "Sheet removed from this blast"
-  const first = sheetsById.get(r.sheetIds[r.sheetIds.length - 1] ?? "")
+function sheetLabel(r: RecipientRow, sources: Map<string, string>): string {
+  if (r.outside) return "No longer in this blast's sheets or files"
+  const first = sources.get(r.sheetIds[r.sheetIds.length - 1] ?? "")
   const more = r.sheetIds.length - 1
-  return first ? `${first.title}${more > 0 ? ` +${more}` : ""}` : "—"
+  return first ? `${first}${more > 0 ? ` +${more}` : ""}` : "—"
 }
 
 function StatusCell({ row }: { row: RecipientRow }) {
@@ -523,12 +521,12 @@ function StatusCell({ row }: { row: RecipientRow }) {
 
 function SheetFilter({
   sheetIds,
-  sheetsById,
+  sources,
   value,
   onChange,
 }: {
   sheetIds: string[]
-  sheetsById: Map<string, Sheet>
+  sources: Map<string, string>
   value: string
   onChange: (v: string) => void
 }) {
@@ -536,14 +534,14 @@ function SheetFilter({
     () =>
       createListCollection({
         items: [
-          { value: ALL_SHEETS, label: "All sheets" },
+          { value: ALL_SHEETS, label: "All sheets and files" },
           ...sheetIds.map((id) => ({
             value: id,
-            label: sheetsById.get(id)?.title ?? "Deleted sheet",
+            label: sources.get(id) ?? "Deleted sheet",
           })),
         ],
       }),
-    [sheetIds, sheetsById]
+    [sheetIds, sources]
   )
   return (
     <Select
