@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/table"
 import { useBlasts } from "@/hooks/use-blasts"
 import { useClients } from "@/hooks/use-clients"
+import { clientForSender } from "@/lib/clients"
 import { useSheets } from "@/hooks/use-sheets"
 import { ApiError, apiPost } from "@/lib/api"
 import type { Blast } from "@/lib/blasts/types"
@@ -155,7 +156,10 @@ export function BlastsPage() {
                       key={b.id}
                       blast={b}
                       clients={clientsOf(b, sheetsById)}
-                      sendsWith={sendsWith.get(b.email.clientId)}
+                      sendsWith={sendsWith.get(
+                        b.email.clientId ||
+                          clientForSender(clientProfiles, b.email.fromEmail)
+                      )}
                       onAction={run}
                     />
                   ))}
@@ -183,9 +187,18 @@ export function BlastsPage() {
                             ? `${b.sentCount.toLocaleString()} sent`
                             : "Not sent yet"}
                         </Badge>
-                        {sendsWith.get(b.email.clientId) && (
+                        {sendsWith.get(
+                          b.email.clientId ||
+                            clientForSender(clientProfiles, b.email.fromEmail)
+                        ) && (
                           <Badge variant="secondary">
-                            {sendsWith.get(b.email.clientId)}
+                            {sendsWith.get(
+                              b.email.clientId ||
+                                clientForSender(
+                                  clientProfiles,
+                                  b.email.fromEmail
+                                )
+                            )}
                           </Badge>
                         )}
                         <span className="truncate">

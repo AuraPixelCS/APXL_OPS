@@ -2,7 +2,12 @@
 // Resend account a blast sends through (AuraPixel's own, or its client's).
 // Server only.
 import type { Firestore } from "firebase-admin/firestore"
-import { canSendFrom, NO_RESEND, type ResendStatus } from "@/lib/clients"
+import {
+  canSendFrom,
+  clientForSender,
+  NO_RESEND,
+  type ResendStatus,
+} from "@/lib/clients"
 import { openSecret, secretsReady } from "@/lib/secrets"
 
 /** Asks Resend what a key can do: its verified domains, if it may list them. */
@@ -56,17 +61,26 @@ export interface SendingAccount {
 
 /**
  * The Resend account a blast sends through: its client's when it's tagged
- * with one, else AuraPixel's (RESEND_API_KEY). Also checks the sender address
- * is on one of that account's domains.
+ * with one (or, untagged, the client whose Resend has the sender's domain),
+ * else AuraPixel's (RESEND_API_KEY). Also checks the sender address is on one
+ * of that account's domains.
  */
 export async function sendingAccount(
   db: Firestore,
-  clientId: string,
+  tagged: string,
   fromEmail: string
 ): Promise<
   | { ok: true; account: SendingAccount }
   | { ok: false; error: string; status: number; field?: "fromEmail" }
 > {
+  let clientId = tagged
+  if (!clientId) {
+    const all = await db.collection("clients").get()
+    clientId = clientForSender(
+      all.docs.map((d) => ({ id: d.id, resend: toStatus(d.get("resend")) })),
+      fromEmail
+    )
+  }
   if (!clientId) {
     const key = process.env.RESEND_API_KEY
     return key

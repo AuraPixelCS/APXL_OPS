@@ -84,6 +84,24 @@ export function domainOf(email: string): string {
   return email.trim().toLowerCase().split("@")[1] ?? ""
 }
 
+/**
+ * The client whose Resend has the sender's domain verified, or "". A domain
+ * can be verified in only one Resend account, so an info@thinktx.my sender can
+ * only ever go out through ThinkTx's: an untagged blast uses it automatically.
+ */
+export function clientForSender(
+  clients: Pick<ClientProfile, "id" | "resend">[],
+  fromEmail: string
+): string {
+  const domain = domainOf(fromEmail)
+  const hits = domain
+    ? clients.filter(
+        (c) => c.resend.connected && c.resend.domains.includes(domain)
+      )
+    : []
+  return hits.length === 1 ? hits[0].id : ""
+}
+
 /** Whether this Resend account can send as `email` (true when we can't tell).
  * Resend verifies every subdomain on its own, so it's an exact match. */
 export function canSendFrom(status: ResendStatus, email: string): boolean {

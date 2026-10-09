@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select"
 import { useClients } from "@/hooks/use-clients"
 import { useSettings } from "@/hooks/use-settings"
-import { canSendFrom, type ClientProfile } from "@/lib/clients"
+import { canSendFrom, clientForSender, type ClientProfile } from "@/lib/clients"
 
 /** Ark Select can't hold "", so AuraPixel's own account is this value. */
 const OWN = "aurapixel"
@@ -90,7 +90,9 @@ export function SendWithField({ form }: { form: BlastEmailForm }) {
   const { values: own } = useSettings("email")
   const { values: v, set, errors } = form
   if (!clients.length && !v.clientId) return null
-  const client = clients.find((c) => c.id === v.clientId)
+  // Untagged, it still sends with the client that owns the sender's domain.
+  const effective = v.clientId || clientForSender(clients, v.fromEmail)
+  const client = clients.find((c) => c.id === effective)
 
   function pick(clientId: string) {
     set("clientId", clientId)
@@ -115,7 +117,7 @@ export function SendWithField({ form }: { form: BlastEmailForm }) {
   return (
     <ClientSelect
       clients={clients}
-      value={v.clientId}
+      value={effective}
       onChange={pick}
       error={errors.clientId ?? clientProblem(client, v.fromEmail)}
     />

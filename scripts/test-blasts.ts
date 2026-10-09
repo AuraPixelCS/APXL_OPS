@@ -17,7 +17,12 @@ import {
   setLinkUrl,
 } from "../lib/blasts/html.ts"
 import { randomBytes } from "node:crypto"
-import { canSendFrom, NO_RESEND, validateClient } from "../lib/clients.ts"
+import {
+  canSendFrom,
+  clientForSender,
+  NO_RESEND,
+  validateClient,
+} from "../lib/clients.ts"
 import { openSecret, sealSecret, secretsReady } from "../lib/secrets.ts"
 import {
   buildRows,
@@ -460,7 +465,10 @@ ok(
     openSecret(sealedKey) === "re_test_1234567890",
   "a key is sealed (not readable as text) and opens again"
 )
-ok(sealSecret("same") !== sealSecret("same"), "sealing twice never looks the same")
+ok(
+  sealSecret("same") !== sealSecret("same"),
+  "sealing twice never looks the same"
+)
 const [v1, iv, tag, data] = sealedKey.split(":")
 const flipped = Buffer.from(data, "base64")
 flipped[0] ^= 1
@@ -499,6 +507,16 @@ ok(
 ok(
   canSendFrom({ ...tx, restricted: true, domains: [] }, "x@anything.co"),
   "a sending-only key (domains unknown) isn't second-guessed"
+)
+const people = [
+  { id: "thinktx", resend: tx },
+  { id: "noKey", resend: { ...NO_RESEND, domains: ["other.co"] } },
+]
+ok(
+  clientForSender(people, "info@thinktx.my") === "thinktx" &&
+    clientForSender(people, "hello@aurapixel.live") === "" &&
+    clientForSender(people, "x@other.co") === "",
+  "an untagged sender goes with the client whose Resend owns its domain"
 )
 ok(
   validateBlastEmail({ ...base, clientId: "Ab12Cd34Ef56Gh78" }).ok &&
