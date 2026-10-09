@@ -235,4 +235,46 @@ ok(
   "counts"
 )
 
+// Button and banner links: redirecting/tracking links with query strings work,
+// and links pasted without https:// get it.
+const redirect = "https://bit.ly/tx-budget27?utm_source=ops&utm_medium=email"
+v = validateBlastEmail({
+  ...base,
+  buttonLabel: "Read the update",
+  buttonUrl: redirect,
+  bannerLink: "thinktx.my/learning-hub",
+})
+ok(v.ok, "a redirect link with a query string is accepted")
+if (v.ok) {
+  ok(v.email.buttonUrl === redirect, "the button link is kept exactly")
+  ok(
+    v.email.bannerLink === "https://thinktx.my/learning-hub",
+    "a link pasted without https:// gets it"
+  )
+  const out = renderBlastEmail(v.email, {
+    name: "Aina",
+    bannerSrc: "https://www.aurapixel.live/ops/api/blasts/banner/abcdefghij",
+    unsubscribeUrl: "https://www.aurapixel.live/ops/unsubscribe?x",
+  })
+  ok(
+    out.html.includes(
+      'href="https://bit.ly/tx-budget27?utm_source=ops&amp;utm_medium=email"'
+    ) && out.html.includes(">Read the update</a>"),
+    "the button renders as a link to the redirect (& escaped for HTML)"
+  )
+  ok(
+    out.html.includes('<a href="https://thinktx.my/learning-hub"><img'),
+    "the banner links where it should"
+  )
+  ok(
+    out.text.includes(`Read the update: ${redirect}`),
+    "the plain-text version carries the button link"
+  )
+}
+for (const bad of ["info@thinktx.my", "javascript:alert(1)", "thinktx"])
+  ok(
+    !validateBlastEmail({ ...base, buttonLabel: "Go", buttonUrl: bad }).ok,
+    `rejects "${bad}" as a button link`
+  )
+
 console.log(`blasts: ${passed} checks passed`)

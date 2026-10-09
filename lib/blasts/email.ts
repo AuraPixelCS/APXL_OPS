@@ -67,6 +67,16 @@ const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i
 const URL_RE = /^(https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+|tel:\+?[\d\s()-]+)$/i
 const COLOR_RE = /^#[0-9a-f]{6}$/i
 
+/** "thinktx.my/updates" → "https://thinktx.my/updates": links are often pasted
+ * without the scheme. Anything else (mailto:, tel:, a typo) is left for the
+ * link check to report. */
+function withScheme(raw: string): string {
+  const url = raw.trim()
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#:]|$)/i.test(url)
+    ? `https://${url}`
+    : url
+}
+
 /**
  * Checks a blast email. `sending` adds what a real send needs (sender,
  * subject, body); saving a half-written draft only checks what's there.
@@ -90,11 +100,11 @@ export function validateBlastEmail(
     subject: str("subject").trim().replace(/\s+/g, " "),
     preheader: str("preheader").trim().replace(/\s+/g, " "),
     bannerId: str("bannerId").trim(),
-    bannerLink: str("bannerLink").trim(),
+    bannerLink: withScheme(str("bannerLink")),
     heading: str("heading").trim(),
     body: str("body").replace(/\r\n?/g, "\n").replace(/\s+$/, ""),
     buttonLabel: str("buttonLabel").trim(),
-    buttonUrl: str("buttonUrl").trim(),
+    buttonUrl: withScheme(str("buttonUrl")),
     buttonColor: str("buttonColor").trim() || DEFAULT_BUTTON_COLOR,
     footer: str("footer").replace(/\r\n?/g, "\n").trim(),
   }

@@ -507,6 +507,53 @@ function ColorField({
 
 // ── Preview ────────────────────────────────────────────────────────────────
 
+// The preview iframe is sandboxed (an opaque origin), so it can't reuse the
+// page's image cache: with a plain URL every keystroke downloaded the banner
+// again, one request per character, until Vercel's bot protection started
+// refusing the browser with 403s (saves failed, the banner broke). Each banner
+// is fetched once and handed to the iframe as a data: URL.
+const bannerCache = new Map<string, Promise<string>>()
+
+function loadBanner(id: string): Promise<string> {
+  let data = bannerCache.get(id)
+  if (!data) {
+    data = fetch(withBasePath(`/api/blasts/banner/${id}`))
+      .then((res) =>
+        res.ok ? res.blob() : Promise.reject(new Error(String(res.status)))
+      )
+      .then(
+        (blob) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(String(reader.result))
+            reader.onerror = () => reject(reader.error)
+            reader.readAsDataURL(blob)
+          })
+      )
+    data.catch(() => bannerCache.delete(id))
+    bannerCache.set(id, data)
+  }
+  return data
+}
+
+/** The banner as a data: URL ("" while it loads; its link if it can't). */
+function useBannerDataUrl(id: string): string {
+  const [loaded, setLoaded] = React.useState({ id: "", src: "" })
+  React.useEffect(() => {
+    if (!id) return
+    let live = true
+    loadBanner(id).then(
+      (src) => live && setLoaded({ id, src }),
+      () =>
+        live && setLoaded({ id, src: withBasePath(`/api/blasts/banner/${id}`) })
+    )
+    return () => {
+      live = false
+    }
+  }, [id])
+  return id && loaded.id === id ? loaded.src : ""
+}
+
 function EmailPreview({
   email,
   sampleName,
@@ -517,18 +564,18 @@ function EmailPreview({
   onTest: () => void
 }) {
   const [device, setDevice] = React.useState<"desktop" | "phone">("desktop")
+  // Typing re-renders the iframe; deferring lets fast typing skip frames.
+  const shown = React.useDeferredValue(email)
+  const bannerSrc = useBannerDataUrl(shown.bannerId)
   const html = React.useMemo(() => {
-    const origin = typeof window === "undefined" ? "" : window.location.origin
-    const { html } = renderBlastEmail(email, {
+    const { html } = renderBlastEmail(shown, {
       name: sampleName,
-      bannerSrc: email.bannerId
-        ? `${origin}${withBasePath(`/api/blasts/banner/${email.bannerId}`)}`
-        : "",
+      bannerSrc,
       unsubscribeUrl: "#",
     })
     // Links open in a new tab instead of inside the preview.
     return html.replace("<head>", '<head><base target="_blank">')
-  }, [email, sampleName])
+  }, [shown, bannerSrc, sampleName])
   const subject = email.subject.replaceAll(
     BLAST_PLACEHOLDER,
     sampleName || "there"
