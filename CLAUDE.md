@@ -29,6 +29,13 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   globals.css that overrides our status colours: delete it.
 - **Layout:** edge-to-edge, `page-x` utility for gutters, no centred max-width
   page containers. Mobile-first, touch targets ≥ 40–44px (buttons `size="lg"/"xl"`).
+  On touch screens (`@media (pointer: coarse)` in globals.css) menu items, select items,
+  sidebar links, dialog close and the password eye get 44px; Shark buttons already add a
+  44px invisible hit area there. Inputs are 16px on phones (no iOS zoom). Sticky bottom
+  bars (SaveBar only while dirty, the blast send bar) sit at the end of the content;
+  toasts are top-end so they never cover them. Lists are cards under `md`, tables above.
+  Mobile check: `pw-mobile-audit` style run at 360 and 390px (note: Playwright full-page
+  screenshots drop touch emulation, so measure before screenshotting).
 - Code style: Prettier config from PXL Booth (no semicolons, double quotes).
 
 ## Next 16.4 specifics (Cache Components + Partial Prefetching are on)
@@ -73,6 +80,35 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
 - Leads list scoping (`useLeads({clientKey | sheetId})`) uses single-field `where`
   filters with no `orderBy`, so no composite indexes; sorted in the browser. Unscoped it's
   the newest 1000. Filters live in the URL (`/leads?client=…` / `?sheet=…`).
+- **Email blasts** (`/blasts`, `blasts/{id}`): a blast = name + up to 30 sheets
+  (`array-contains-any` limit) + its own email (`lib/blasts/email.ts`: fields, validation,
+  renderer). The SAME `renderBlastEmail` drives the editor's iframe preview, the test send
+  and the real send. Body is plain text with light formatting (**bold**, [text](url), "- "
+  lists, bare links); `{name}` is inserted AFTER formatting and escaped, so a lead whose
+  "name" is markdown/HTML can't inject links. Send tracking:
+  `blasts/{id}/recipients/{email}` (doc id = lowercased address, `emailDocId`), one per
+  ADDRESS (the same person can be a lead for two clients). `POST /api/blasts/send` only
+  sends to addresses in the blast's sheets, claims each as `sending` first, skips sent /
+  fresh `sending` (<10 min) / unsubscribed, sends Resend batches of 100 with an
+  Idempotency-Key, then marks sent/failed. Account-level refusals (401/403/429/503: daily
+  quota, bad key, unverified domain) RESTORE the claims so people stay "Not sent" instead
+  of "Failed". Max 500 per request; the UI loops for bigger selections.
+- **Unsubscribe**: every email has an Unsubscribe link (`/unsubscribe?b&e&t`, public page
+  outside the auth gate; nothing happens until the person presses the button, because
+  link scanners open links) and `List-Unsubscribe` + `List-Unsubscribe-Post` one-click
+  headers (POST `/api/unsubscribe?b&e&t`). The token is random per recipient doc.
+  `unsubscribes/{email}` applies to EVERY blast. Links always use
+  `https://www.aurapixel.live` (`OPS_PUBLIC_ORIGIN`): the apex redirects, and one-click
+  POSTs don't follow redirects.
+- **Banners** are resized in the browser (≤1200px, ≤880 KB JPEG unless a small PNG/GIF)
+  and stored as bytes in `blastAssets/{id}` (Firestore 1 MiB doc limit; aurapixel-ops is
+  on Spark with no Storage bucket), served publicly with a 1-year cache by
+  `GET /api/blasts/banner/[id]`.
+- **Resend**: `RESEND_API_KEY` on Vercel (sensitive, production) + `.env.local`, set by
+  `npm run setup:email` (Mandy runs it; it can reuse RSVP's key and redeploys). Sender
+  addresses must be on a domain verified in Resend (aurapixel.live is). Without the key,
+  sends and test sends return a 503 saying to run it. Testing: send to Resend's test
+  addresses `delivered+anything@resend.dev` (accepted, never delivered, no reputation hit).
 - **Settings** (`/settings`): `lib/settings.ts` is the single source for sections
   (email, assistant, scoring), their starting values and validation; the form
   (`components/settings/use-settings-form.ts`, edits-over-live-values, no effects)
@@ -147,7 +183,7 @@ A verification build beside the dev servers: `OPS_DIST_DIR=.next-build npx next 
 
 ## Deploying
 
-Git push to `main` on `AuraPixelCS/apxl-ops` deploys to production (Vercel project
+Git push to `main` on `AuraPixelCS/APXL_OPS` deploys to production (Vercel project
 `apxl-ops` in aurapixelcs-projects, region sin1 next to Firestore). The landing page
 (`../landing-page/next.config.ts`) rewrites `/ops` and `/ops/:path*` to
 `https://apxl-ops.vercel.app/ops…`. CLI work needs the AuraPixel token and scope:

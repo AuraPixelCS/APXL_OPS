@@ -42,7 +42,7 @@ export function LeadDetailPage() {
         <span className="flex items-center gap-1.5">
           <Link
             href="/leads"
-            className="text-muted-foreground hover:text-foreground"
+            className="-my-3 inline-flex min-h-11 items-center text-muted-foreground hover:text-foreground"
           >
             Leads
           </Link>
@@ -122,7 +122,9 @@ function LeadView({ lead }: { lead: Lead }) {
       </header>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
-        <Card className="lg:min-h-80">
+        {/* On phones the contact details come first; the (still empty)
+            conversation would otherwise fill the first screen. */}
+        <Card className="max-lg:order-last lg:min-h-80">
           <CardHeader title="Conversation" />
           <CardContent className="flex flex-1 flex-col">
             <EmptyState
@@ -133,7 +135,7 @@ function LeadView({ lead }: { lead: Lead }) {
                   ? `The email thread with ${lead.greetingName} will appear here, with the assistant’s draft replies waiting for your approval.`
                   : "This lead has no usable email address, so there won’t be an email conversation."
               }
-              className="flex-1 border-none"
+              className="flex-1 border-none max-lg:py-8"
             />
           </CardContent>
         </Card>
@@ -167,7 +169,7 @@ function LeadView({ lead }: { lead: Lead }) {
                   {lead.clientKey ? (
                     <Link
                       href={`/leads?client=${encodeURIComponent(lead.clientKey)}`}
-                      className="underline-offset-4 hover:underline"
+                      className="-my-2.5 inline-flex min-h-10 items-center underline-offset-4 hover:underline"
                     >
                       {lead.client}
                     </Link>
@@ -185,7 +187,7 @@ function LeadView({ lead }: { lead: Lead }) {
                         <Link
                           key={id}
                           href={`/leads?sheet=${id}`}
-                          className="break-words underline-offset-4 hover:underline"
+                          className="-my-1 flex min-h-9 items-center break-words underline-offset-4 hover:underline"
                         >
                           {sheetsById.get(id)?.title ?? "Deleted sheet"}
                         </Link>

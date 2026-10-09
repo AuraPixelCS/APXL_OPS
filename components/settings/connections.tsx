@@ -86,9 +86,11 @@ export function Connections() {
     {
       icon: SendIcon,
       name: "Sending email (Resend)",
-      detail: "Set up inside n8n with a Resend API key for aurapixel.live.",
-      state: "waiting",
-      stateLabel: status.n8n ? "Set up in n8n" : "After n8n",
+      detail: status.email
+        ? "Email blasts send through Resend. Sender addresses must be on a domain verified in Resend, like aurapixel.live."
+        : "Needs a Resend API key on the server. In ap-ops on the Mac, run npm run setup:email.",
+      state: status.email ? "ok" : "missing",
+      stateLabel: status.email ? "Ready" : "Not set up",
     },
     {
       icon: InboxIcon,

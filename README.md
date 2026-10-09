@@ -20,7 +20,7 @@ Firebase project. The server needs Google access on your Mac once:
 ## Live site
 
 https://aurapixel.live/ops. Pushing to `main` on
-[AuraPixelCS/apxl-ops](https://github.com/AuraPixelCS/apxl-ops) deploys it
+[AuraPixelCS/APXL_OPS](https://github.com/AuraPixelCS/APXL_OPS) deploys it
 automatically (Vercel project `apxl-ops`, team aurapixelcs-projects). The landing
 page proxies `/ops` to `apxl-ops.vercel.app/ops`.
 
@@ -32,6 +32,7 @@ page proxies `/ops` to `apxl-ops.vercel.app/ops`.
 | `npm run setup:signin` | One-time: switch on sign-in for the real project and create your admin login |
 | `npm run grant-admin -- you@example.com` | Gives an existing account admin access (real project) |
 | `npm run deploy:rules` | Publishes the database security rules (real project) |
+| `npm run setup:email` | One-time: puts the Resend API key on Vercel (and in `.env.local`) so email blasts can send (`-- --check` to look only) |
 | `npm run setup:vercel-access` | One-time: lets the Vercel deployment use the database without a key file (`-- --check` to look only) |
 | `npm test` | Tests the lead-cleaning rules. Add a CSV path to summarise a file |
 | `npm run typecheck` / `npm run lint` | Code checks |
@@ -48,6 +49,10 @@ page proxies `/ops` to `apxl-ops.vercel.app/ops`.
   earlier sheets, a cleaned preview, duplicates skipped per client
 - **Lead page**: contact details, what's worth checking, the original form answers,
   and the space where the email conversation will appear
+- **Email blasts**: pick sheets, write the email (sender, subject, banner, message,
+  button, footer) with a live preview and a test send, then send in rounds: pick the next
+  100 not-sent people and send. Tracks who was sent, who failed and who unsubscribed;
+  every email has a working Unsubscribe link
 - **Settings → Users**: add admins and clients, edit them, change roles, set or generate
   passwords, email or copy a reset link, suspend or restore access, delete
 - **Settings**: the sender and intro email (with a live preview), what the assistant

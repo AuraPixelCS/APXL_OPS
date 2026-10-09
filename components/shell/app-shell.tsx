@@ -4,6 +4,7 @@ import { signOut } from "firebase/auth"
 import {
   FileSpreadsheetIcon,
   LogOutIcon,
+  SendIcon,
   SettingsIcon,
   UsersIcon,
 } from "lucide-react"
@@ -51,6 +52,12 @@ const NAV_GROUPS = [
         label: "Sheets",
         icon: FileSpreadsheetIcon,
         isActive: (p: string) => p.startsWith("/sheets"),
+      },
+      {
+        href: "/blasts",
+        label: "Email blasts",
+        icon: SendIcon,
+        isActive: (p: string) => p.startsWith("/blasts"),
       },
     ],
   },
@@ -158,7 +165,7 @@ export function AppShell({
 
       <SidebarInset className="min-w-0">
         <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border/70 bg-background/85 px-3 backdrop-blur-md sm:px-4">
-          <SidebarTrigger aria-label="Toggle navigation" />
+          <SidebarTrigger aria-label="Toggle navigation" className="size-10" />
           <Separator orientation="vertical" className="mx-1 h-5" />
           <div className="min-w-0 flex-1 truncate font-heading text-sm font-medium sm:text-base">
             {title}

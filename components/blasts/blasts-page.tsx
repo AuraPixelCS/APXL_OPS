@@ -1,0 +1,321 @@
+"use client"
+
+// Every email blast: open one, or start a new one from imported sheets.
+
+import {
+  ChevronRightIcon,
+  FileSpreadsheetIcon,
+  MailIcon,
+  PlusIcon,
+  TriangleAlertIcon,
+} from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import * as React from "react"
+import { SheetPicker } from "@/components/blasts/sheet-picker"
+import { DialogShell } from "@/components/common/dialog-shell"
+import { EmptyState } from "@/components/common/empty-state"
+import { TextField } from "@/components/settings/form-bits"
+import { AppShell } from "@/components/shell/app-shell"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Spinner } from "@/components/ui/spinner"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { useBlasts } from "@/hooks/use-blasts"
+import { useSheets } from "@/hooks/use-sheets"
+import { ApiError, apiPost } from "@/lib/api"
+import type { Blast } from "@/lib/blasts/types"
+import { formatDateTime, formatRelative } from "@/lib/format"
+import type { Sheet } from "@/lib/leads/sheets"
+
+const blastHref = (b: Blast) => `/blasts/${b.id}`
+
+/** "Skill2U, PEOPLElogy" for a blast's sheets. */
+function clientsOf(b: Blast, sheetsById: Map<string, Sheet>): string {
+  const names = new Set(
+    b.sheetIds.map((id) => sheetsById.get(id)?.client).filter(Boolean)
+  )
+  return [...names].join(", ")
+}
+
+export function BlastsPage() {
+  const { data: blasts, loading, error } = useBlasts()
+  const { data: sheets } = useSheets()
+  const [creating, setCreating] = React.useState(false)
+  const sheetsById = React.useMemo(
+    () => new Map(sheets.map((s) => [s.id, s])),
+    [sheets]
+  )
+
+  const newButton = (size: "lg" | "xl") => (
+    <Button size={size} onClick={() => setCreating(true)}>
+      <PlusIcon />
+      <span>New blast</span>
+    </Button>
+  )
+
+  return (
+    <AppShell
+      title="Email blasts"
+      actions={blasts.length > 0 && newButton("lg")}
+    >
+      <div className="flex flex-col gap-5 page-x py-5 sm:py-6">
+        <div>
+          <h1 className="font-heading text-xl font-semibold tracking-tight">
+            Email blasts
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Each blast has its own email and remembers who it has been sent to,
+            so you can send in rounds: 100 today, the next 100 tomorrow.
+          </p>
+        </div>
+
+        {error && (
+          <Alert variant="destructive">
+            <TriangleAlertIcon />
+            <AlertTitle>Couldn&rsquo;t load blasts</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {loading ? (
+          <div
+            className="flex flex-col gap-2"
+            role="status"
+            aria-label="Loading blasts"
+          >
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-xl" />
+            ))}
+          </div>
+        ) : blasts.length === 0 && !error ? (
+          sheets.length === 0 ? (
+            <EmptyState
+              icon={FileSpreadsheetIcon}
+              title="Import a sheet first"
+              body="A blast sends to the leads in your sheets. Import one, then come back to start a blast."
+              action={
+                <Button asChild size="xl">
+                  <Link href="/sheets/import">Import a sheet</Link>
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={MailIcon}
+              title="No blasts yet"
+              body="Start one, pick the sheets it goes to, write the email, then send it to as many people at a time as you like."
+              action={newButton("xl")}
+            />
+          )
+        ) : (
+          <>
+            <div className="hidden overflow-hidden rounded-xl border md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Blast</TableHead>
+                    <TableHead>Sheets</TableHead>
+                    <TableHead className="text-right">Sent</TableHead>
+                    <TableHead className="text-right">Last sent</TableHead>
+                    <TableHead className="w-10">
+                      <span className="sr-only">Open</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {blasts.map((b) => (
+                    <BlastRow
+                      key={b.id}
+                      blast={b}
+                      clients={clientsOf(b, sheetsById)}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <ul className="flex flex-col gap-2 md:hidden">
+              {blasts.map((b) => (
+                <li key={b.id}>
+                  <Link
+                    href={blastHref(b)}
+                    className="flex min-h-16 items-center gap-3 rounded-xl border bg-card px-4 py-3 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 active:bg-accent"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{b.name}</p>
+                      <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                        {b.email.subject || "No subject yet"}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <Badge variant={b.sentCount ? "info" : "outline"}>
+                          {b.sentCount
+                            ? `${b.sentCount.toLocaleString()} sent`
+                            : "Not sent yet"}
+                        </Badge>
+                        <span className="truncate">
+                          {clientsOf(b, sheetsById) ||
+                            `${b.sheetIds.length} sheets`}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRightIcon
+                      className="size-4 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+
+      {creating && (
+        <NewBlastDialog
+          sheets={sheets}
+          defaultName={`Email blast ${blasts.length + 1}`}
+          onClose={() => setCreating(false)}
+        />
+      )}
+    </AppShell>
+  )
+}
+
+function BlastRow({ blast: b, clients }: { blast: Blast; clients: string }) {
+  const router = useRouter()
+  return (
+    <TableRow
+      className="cursor-pointer"
+      onClick={() => router.push(blastHref(b))}
+    >
+      <TableCell className="max-w-96">
+        <Link
+          href={blastHref(b)}
+          className="block truncate font-medium outline-none hover:underline focus-visible:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {b.name}
+        </Link>
+        <span className="block truncate text-xs text-muted-foreground">
+          {b.email.subject || "No subject yet"}
+        </span>
+      </TableCell>
+      <TableCell className="max-w-72">
+        <span className="block truncate">{clients || "—"}</span>
+        <span className="block text-xs text-muted-foreground">
+          {b.sheetIds.length} {b.sheetIds.length === 1 ? "sheet" : "sheets"}
+        </span>
+      </TableCell>
+      <TableCell className="text-right tabular-nums">
+        {b.sentCount.toLocaleString()}
+      </TableCell>
+      <TableCell
+        className="text-right whitespace-nowrap text-muted-foreground"
+        title={formatDateTime(b.lastSentAt)}
+      >
+        {b.lastSentAt ? formatRelative(b.lastSentAt) : "Not yet"}
+      </TableCell>
+      <TableCell>
+        <ChevronRightIcon
+          className="size-4 text-muted-foreground"
+          aria-hidden
+        />
+      </TableCell>
+    </TableRow>
+  )
+}
+
+function NewBlastDialog({
+  sheets,
+  defaultName,
+  onClose,
+}: {
+  sheets: Sheet[]
+  defaultName: string
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [name, setName] = React.useState(defaultName)
+  const [sheetIds, setSheetIds] = React.useState<string[]>([])
+  const [errors, setErrors] = React.useState<{
+    name?: string
+    sheetIds?: string
+  }>({})
+  const [busy, setBusy] = React.useState(false)
+
+  async function create() {
+    const e: typeof errors = {}
+    if (!name.trim()) e.name = "Give the blast a name."
+    if (!sheetIds.length) e.sheetIds = "Pick at least one sheet."
+    setErrors(e)
+    if (Object.keys(e).length) return
+    setBusy(true)
+    try {
+      const { id } = await apiPost<{ id: string }>("/api/blasts/create", {
+        name,
+        sheetIds,
+      })
+      onClose()
+      router.push(`/blasts/${id}?tab=email`)
+    } catch (err) {
+      setErrors(
+        err instanceof ApiError && Object.keys(err.fields).length
+          ? err.fields
+          : {
+              sheetIds:
+                err instanceof Error ? err.message : "Couldn't create it.",
+            }
+      )
+      setBusy(false)
+    }
+  }
+
+  return (
+    <DialogShell
+      open
+      onClose={onClose}
+      title="New email blast"
+      description="Name it, pick who it goes to. You'll write the email next; nothing is sent until you press Send."
+      footer={
+        <>
+          <Button variant="outline" size="xl" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button size="xl" onClick={create} disabled={busy}>
+            {busy && <Spinner />}
+            Create blast
+          </Button>
+        </>
+      }
+    >
+      <TextField
+        label="Name"
+        value={name}
+        onChange={(v) => {
+          setName(v)
+          setErrors((e) => ({ ...e, name: undefined }))
+        }}
+        error={errors.name}
+        helper="Only you and other admins see this."
+      />
+      <SheetPicker
+        sheets={sheets}
+        value={sheetIds}
+        onChange={(ids) => {
+          setSheetIds(ids)
+          setErrors((e) => ({ ...e, sheetIds: undefined }))
+        }}
+        error={errors.sheetIds}
+      />
+    </DialogShell>
+  )
+}

@@ -123,6 +123,25 @@
   --chart-5: #fbbf24;
 }
 
+/* Phones and tablets: every tap target at least 44px tall (Apple's minimum).
+   Desktop keeps Shark's denser sizes. Ark marks its parts with data-scope /
+   data-part, so this reaches menus, selects and dialogs without touching the
+   vendored components. */
+@media (pointer: coarse) {
+  [data-scope="menu"][data-part="item"],
+  [data-scope="select"][data-part="item"],
+  [data-slot="sidebar-menu-button"] {
+    min-height: 2.75rem;
+  }
+  [data-scope="dialog"][data-part="close-trigger"],
+  [data-slot="sidebar-trigger"],
+  [data-slot="password-input-visibility-trigger"],
+  [data-slot="password-input-visibility-trigger"] > button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
 @layer base {
   ::selection {
     @apply bg-primary/80 text-primary-foreground;

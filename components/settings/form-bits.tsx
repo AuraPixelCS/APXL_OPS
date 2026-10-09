@@ -122,7 +122,10 @@ export function SaveBar({
   return (
     <div
       className={cn(
-        "sticky bottom-0 z-10 -mx-4 mt-2 flex flex-col gap-3 border-t bg-background/90 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:-mx-8 lg:px-8",
+        "-mx-4 mt-2 flex flex-col gap-3 border-t px-4 py-3 sm:-mx-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:-mx-8 lg:px-8",
+        // Only pinned to the bottom while there's something to save, so on
+        // phones it doesn't take up the screen the rest of the time.
+        dirty && "sticky bottom-0 z-10 bg-background/90 backdrop-blur-md",
         "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       )}
     >

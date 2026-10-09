@@ -22,7 +22,8 @@ import { Spinner } from "@/components/ui/spinner";
 export const useToast = useToastContext;
 
 export const toast = createToaster({
-  placement: "bottom-end",
+  // Ops: top, so toasts never cover the sticky Save / Send bars at the bottom.
+  placement: "top-end",
   overlap: true,
   max: 3,
 });

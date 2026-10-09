@@ -16,14 +16,14 @@ export function StatTile({
   return (
     <div
       className={cn(
-        "flex flex-col gap-1 rounded-xl border bg-card p-4",
+        "flex flex-col gap-1 rounded-xl border bg-card p-3 sm:p-4",
         className
       )}
     >
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       <span
         className={cn(
-          "font-heading text-2xl font-semibold tracking-tight tabular-nums",
+          "font-heading text-xl font-semibold tracking-tight tabular-nums sm:text-2xl",
           tone === "brand" && "text-info",
           tone === "warning" && "text-warning",
           tone === "muted" && "text-muted-foreground"

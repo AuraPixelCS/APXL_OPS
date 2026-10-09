@@ -8,12 +8,13 @@
     "start": "next start -p 3100",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings scripts/test-clean.ts",
+    "test": "node --experimental-strip-types --no-warnings scripts/test-clean.ts && node --experimental-strip-types --no-warnings scripts/test-blasts.ts",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "deploy:rules": "node scripts/deploy-rules.mjs",
     "setup:signin": "node scripts/setup-signin.mjs",
     "grant-admin": "node scripts/grant-admin.mjs",
-    "setup:vercel-access": "node scripts/setup-vercel-access.mjs"
+    "setup:vercel-access": "node scripts/setup-vercel-access.mjs",
+    "setup:email": "node scripts/setup-email.mjs"
   },
   "dependencies": {
     "@ark-ui/react": "^5.39.3",

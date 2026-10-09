@@ -4,12 +4,15 @@
 // reports WHETHER each secret is set, never its value.
 
 import { NextResponse } from "next/server"
+import { isEmailConfigured } from "@/lib/blasts/resend"
 import { verifyAdmin } from "@/lib/firebase/admin-guard"
 
 export interface ConnectionStatus {
   database: { projectId: string | null }
   assistant: boolean
   n8n: boolean
+  /** RESEND_API_KEY is set: email blasts can send. */
+  email: boolean
 }
 
 export async function POST(req: Request) {
@@ -24,6 +27,7 @@ export async function POST(req: Request) {
     },
     assistant: Boolean(process.env.ANTHROPIC_API_KEY),
     n8n: Boolean(process.env.N8N_WEBHOOK_URL && process.env.OPS_WEBHOOK_SECRET),
+    email: isEmailConfigured(),
   }
   return NextResponse.json(status)
 }
