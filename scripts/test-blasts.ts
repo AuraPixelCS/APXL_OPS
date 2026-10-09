@@ -9,14 +9,22 @@ import {
   validateBlastEmail,
 } from "../lib/blasts/email.ts"
 import {
+  cleanHtml,
+  findImages,
+  findLinks,
+  htmlToText,
+  replaceImageSrc,
+  setLinkUrl,
+} from "../lib/blasts/html.ts"
+import {
   buildRows,
   canSelect,
   countByStatus,
 } from "../lib/blasts/recipients.ts"
 
 let passed = 0
-const ok = (cond: unknown, msg: string) => {
-  assert.ok(cond, msg)
+const ok = (cond: unknown, msg: string, detail?: unknown) => {
+  assert.ok(cond, detail === undefined ? msg : `${msg}: ${String(detail)}`)
   passed++
 }
 
@@ -276,5 +284,165 @@ for (const bad of ["info@thinktx.my", "javascript:alert(1)", "thinktx"])
     !validateBlastEmail({ ...base, buttonLabel: "Go", buttonUrl: bad }).ok,
     `rejects "${bad}" as a button link`
   )
+
+// Custom designs (a client's own HTML)
+const design = `<!doctype html><html><head><title>x</title></head><body>
+<!--[if mso]><a href="https://outlook-only.example">Outlook</a><![endif]-->
+<img src="images/Hero%20Shot.jpg" alt="Skyline"><img src="https://cdn.x.co/logo.png" alt="Logo">
+<p>Dear {name},</p>
+<a href="#" style="background:#EE1D46">READ THE <b>BUDGET</b> 2027 HIGHLIGHTS</a>
+<a href='thinktx.my'>thinktx.my</a>
+<a href="https://x.co/?a=1&amp;b=2"><img src="logo.png" alt="ThinkTx"></a>
+<a href="{unsubscribe_url}">Unsubscribe</a>
+<script>alert(1)</script><a href="javascript:alert(2)" onclick="steal()">bad</a>
+</body></html>`
+const cleaned = cleanHtml(design)
+ok(
+  !/<script|onclick|javascript:/i.test(cleaned),
+  "scripts, event handlers and javascript: links are removed"
+)
+const links = findLinks(cleaned)
+ok(
+  links.length === 5 && !links.some((l) => l.url.includes("outlook-only")),
+  "links inside Outlook-only comments aren't listed"
+)
+ok(
+  links[0].text === "READ THE BUDGET 2027 HIGHLIGHTS" && links[0].url === "#",
+  "a button's text is read through inner tags"
+)
+ok(links[1].url === "https://thinktx.my", "links without https:// get it")
+ok(
+  links[2].url === "https://x.co/?a=1&b=2" &&
+    links[2].text === "Image: ThinkTx",
+  "&amp; in links is decoded; image links are named by their alt text"
+)
+const relinked = setLinkUrl(
+  cleaned,
+  0,
+  "https://bit.ly/tx27?utm_source=ops&utm_medium=email"
+)
+ok(
+  relinked.includes(
+    'href="https://bit.ly/tx27?utm_source=ops&amp;utm_medium=email" style="background:#EE1D46"'
+  ) &&
+    relinked.replace(
+      'href="https://bit.ly/tx27?utm_source=ops&amp;utm_medium=email"',
+      'href="#"'
+    ) === cleaned,
+  "editing a link changes only that href"
+)
+ok(
+  findImages(cleaned)
+    .map((i) => i.src)
+    .join("|") === "images/Hero%20Shot.jpg|https://cdn.x.co/logo.png|logo.png",
+  "images are found in order"
+)
+ok(
+  replaceImageSrc(cleaned, "logo.png", "https://h.co/a?x=1&y=2").includes(
+    'src="https://h.co/a?x=1&amp;y=2" alt="ThinkTx"'
+  ),
+  "an image's src can be replaced"
+)
+const cBase = {
+  ...base,
+  design: "custom" as const,
+  // the cleaned-out javascript: link (now "#") gets a real address
+  html: setLinkUrl(relinked, 4, "https://thinktx.my/contact"),
+  preheader: "Budget 2027 highlights",
+}
+v = validateBlastEmail(cBase, { sending: true })
+ok(
+  !v.ok &&
+    /missing images: hero shot\.jpg, logo\.png/.test(v.errors.html ?? ""),
+  "sending needs the design's images uploaded",
+  v.ok ? "" : v.errors.html
+)
+v = validateBlastEmail(
+  {
+    ...cBase,
+    html: replaceImageSrc(
+      replaceImageSrc(cBase.html, "images/Hero%20Shot.jpg", "https://h.co/1"),
+      "logo.png",
+      "https://h.co/2"
+    ),
+  },
+  { sending: true }
+)
+ok(
+  v.ok,
+  "a finished custom design can be sent",
+  v.ok ? "" : JSON.stringify(v.errors)
+)
+ok(
+  validateBlastEmail({ ...cBase, html: cleaned }).ok &&
+    !validateBlastEmail({ ...cBase, html: cleaned }, { sending: true }).ok,
+  "an empty button link can be saved as a draft but not sent"
+)
+ok(
+  !validateBlastEmail({ ...cBase, html: '<a href="not a link">x</a>' }).ok,
+  "a broken link stops even a draft save"
+)
+ok(
+  validateBlastEmail(
+    { ...cBase, design: "standard", body: "Hi {name},\n\n" },
+    { sending: false }
+  ).ok &&
+    validateBlastEmail({ ...cBase, body: "" }, { sending: true }).ok === false,
+  "the standard layout ignores the design and vice versa"
+)
+if (v.ok) {
+  const r = renderBlastEmail(v.email, {
+    name: "<b>Aina</b>",
+    bannerSrc: "",
+    unsubscribeUrl: "https://www.aurapixel.live/ops/unsubscribe?b=1&e=a&t=z",
+  })
+  ok(
+    r.html.includes("Dear &lt;b&gt;Aina&lt;/b&gt;,"),
+    "{name} is escaped in a custom design"
+  )
+  ok(
+    r.html.includes(
+      'href="https://www.aurapixel.live/ops/unsubscribe?b=1&amp;e=a&amp;t=z">Unsubscribe'
+    ) && (r.html.match(/Unsubscribe<\/a>/g) ?? []).length === 1,
+    "the design's own Unsubscribe link is filled in (no second one added)"
+  )
+  ok(
+    /<body>\n<div style="display:none[^>]*>Budget 2027 highlights/.test(r.html),
+    "preview text goes right after <body>"
+  )
+  ok(
+    r.text.includes(
+      "READ THE BUDGET 2027 HIGHLIGHTS (https://bit.ly/tx27?utm_source=ops&utm_medium=email)"
+    ) &&
+      r.text.includes("Dear <b>Aina</b>,") &&
+      !r.text.includes("display:none") &&
+      !r.text.includes("Budget 2027 highlights\n"),
+    "the plain-text version has the text and the button link",
+    r.text
+  )
+  const noUnsub = renderBlastEmail(
+    { ...v.email, html: "<p>Hello {name}</p>" },
+    { name: "", bannerSrc: "", unsubscribeUrl: "https://u.co/x" }
+  )
+  ok(
+    noUnsub.html.startsWith("<!doctype html>") &&
+      noUnsub.html.includes("Hello there") &&
+      noUnsub.html.includes('<a href="https://u.co/x"') &&
+      noUnsub.text.includes("Unsubscribe (https://u.co/x)"),
+    "a fragment gets a full page and an Unsubscribe line"
+  )
+}
+ok(
+  htmlToText(
+    "<p>A&amp;B&nbsp;&rsquo;s</p><ul><li>One</li><li>Two</li></ul>"
+  ) === "A&B ’s\n\n- One\n- Two",
+  "entities and lists in the text version"
+)
+ok(
+  htmlToText(
+    '<a href="https://thinktx.my"><img src="l.png" alt="ThinkTx"></a><p>Hi</p>'
+  ) === "ThinkTx\n\nHi",
+  "a linked logo becomes its alt text in the text version"
+)
 
 console.log(`blasts: ${passed} checks passed`)

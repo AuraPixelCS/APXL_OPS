@@ -1,6 +1,7 @@
 "use client"
 
-// Write the blast's email: sender, subject, banner, message, button, footer,
+// Write the blast's email: sender, subject, then either Ops' simple layout
+// (banner, message, button, footer) or the client's own custom design (HTML),
 // with a live preview rendered by the same code that sends it, and a test send.
 
 import {
@@ -15,6 +16,7 @@ import {
   UserRoundIcon,
 } from "lucide-react"
 import * as React from "react"
+import { CustomDesign } from "@/components/blasts/custom-design"
 import type { BlastEmailForm } from "@/components/blasts/use-blast-email-form"
 import { useAuth } from "@/components/auth/auth-provider"
 import { DialogShell } from "@/components/common/dialog-shell"
@@ -135,66 +137,25 @@ export function EmailTab({
           </SectionCard>
 
           <SectionCard
-            title="Banner (optional)"
-            description="A wide image at the top. 1200 × 400 px works well."
+            title="Layout"
+            description="Write the email here, or send the client's own finished design."
           >
-            <BannerField blastId={blast.id} form={form} />
-          </SectionCard>
-
-          <SectionCard title="Message">
-            <TextField
-              label="Heading (optional)"
-              value={v.heading}
-              onChange={(x) => set("heading", x)}
-              error={e.heading}
-            />
-            <BodyField
-              value={v.body}
-              onChange={(x) => set("body", x)}
-              error={e.body}
+            <FilterTabs
+              value={v.design}
+              onChange={(d) => set("design", d)}
+              label="Layout"
+              options={[
+                { value: "standard", label: "Simple layout" },
+                { value: "custom", label: "Custom design" },
+              ]}
             />
           </SectionCard>
 
-          <SectionCard
-            title="Button (optional)"
-            description="One clear thing to do, like Register or Chat on WhatsApp."
-          >
-            <div className="grid gap-5 sm:grid-cols-2">
-              <TextField
-                label="Button text"
-                value={v.buttonLabel}
-                onChange={(x) => set("buttonLabel", x)}
-                error={e.buttonLabel}
-                placeholder="Book your seat"
-              />
-              <TextField
-                label="Button link"
-                type="url"
-                inputMode="url"
-                value={v.buttonUrl}
-                onChange={(x) => set("buttonUrl", x)}
-                error={e.buttonUrl}
-                placeholder="https://"
-              />
-            </div>
-            <ColorField
-              value={v.buttonColor}
-              onChange={(x) => set("buttonColor", x)}
-              error={e.buttonColor}
-            />
-          </SectionCard>
-
-          <SectionCard title="Footer">
-            <AreaField
-              label="Small print"
-              rows={3}
-              value={v.footer}
-              onChange={(x) => set("footer", x)}
-              error={e.footer}
-              max={BLAST_LIMITS.footer}
-              helper="Who it's from and your address. An Unsubscribe link is always added under it."
-            />
-          </SectionCard>
+          {v.design === "custom" ? (
+            <CustomDesign blastId={blast.id} form={form} />
+          ) : (
+            <StandardSections blast={blast} form={form} />
+          )}
         </div>
 
         <div
@@ -229,6 +190,82 @@ export function EmailTab({
         />
       )}
     </div>
+  )
+}
+
+/** Ops' own layout: banner, message, button, footer. */
+function StandardSections({
+  blast,
+  form,
+}: {
+  blast: Blast
+  form: BlastEmailForm
+}) {
+  const { values: v, errors: e, set } = form
+  return (
+    <>
+      <SectionCard
+        title="Banner (optional)"
+        description="A wide image at the top. 1200 × 400 px works well."
+      >
+        <BannerField blastId={blast.id} form={form} />
+      </SectionCard>
+
+      <SectionCard title="Message">
+        <TextField
+          label="Heading (optional)"
+          value={v.heading}
+          onChange={(x) => set("heading", x)}
+          error={e.heading}
+        />
+        <BodyField
+          value={v.body}
+          onChange={(x) => set("body", x)}
+          error={e.body}
+        />
+      </SectionCard>
+
+      <SectionCard
+        title="Button (optional)"
+        description="One clear thing to do, like Register or Chat on WhatsApp."
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <TextField
+            label="Button text"
+            value={v.buttonLabel}
+            onChange={(x) => set("buttonLabel", x)}
+            error={e.buttonLabel}
+            placeholder="Book your seat"
+          />
+          <TextField
+            label="Button link"
+            type="url"
+            inputMode="url"
+            value={v.buttonUrl}
+            onChange={(x) => set("buttonUrl", x)}
+            error={e.buttonUrl}
+            placeholder="https://"
+          />
+        </div>
+        <ColorField
+          value={v.buttonColor}
+          onChange={(x) => set("buttonColor", x)}
+          error={e.buttonColor}
+        />
+      </SectionCard>
+
+      <SectionCard title="Footer">
+        <AreaField
+          label="Small print"
+          rows={3}
+          value={v.footer}
+          onChange={(x) => set("footer", x)}
+          error={e.footer}
+          max={BLAST_LIMITS.footer}
+          helper="Who it's from and your address. An Unsubscribe link is always added under it."
+        />
+      </SectionCard>
+    </>
   )
 }
 
@@ -536,22 +573,35 @@ function loadBanner(id: string): Promise<string> {
   return data
 }
 
-/** The banner as a data: URL ("" while it loads; its link if it can't). */
-function useBannerDataUrl(id: string): string {
-  const [loaded, setLoaded] = React.useState({ id: "", src: "" })
+/** Our uploaded images (banner, or a custom design's), on any host. */
+const ASSET_RE = new RegExp(
+  `(?:https?://[^\\s"'()<>]*?)?${withBasePath("/api/blasts/banner/").replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}([A-Za-z0-9]{10,40})`,
+  "g"
+)
+const BLANK_GIF =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+
+/** Each uploaded image as a data: URL, once loaded (its link if it can't be). */
+function useAssetDataUrls(ids: string[]): Record<string, string> {
+  const key = [...new Set(ids)].sort().join(",")
+  const [loaded, setLoaded] = React.useState<Record<string, string>>({})
   React.useEffect(() => {
-    if (!id) return
     let live = true
-    loadBanner(id).then(
-      (src) => live && setLoaded({ id, src }),
-      () =>
-        live && setLoaded({ id, src: withBasePath(`/api/blasts/banner/${id}`) })
-    )
+    for (const id of key ? key.split(",") : [])
+      loadBanner(id).then(
+        (src) => live && setLoaded((m) => (m[id] ? m : { ...m, [id]: src })),
+        () =>
+          live &&
+          setLoaded((m) => ({
+            ...m,
+            [id]: withBasePath(`/api/blasts/banner/${id}`),
+          }))
+      )
     return () => {
       live = false
     }
-  }, [id])
-  return id && loaded.id === id ? loaded.src : ""
+  }, [key])
+  return loaded
 }
 
 function EmailPreview({
@@ -566,16 +616,34 @@ function EmailPreview({
   const [device, setDevice] = React.useState<"desktop" | "phone">("desktop")
   // Typing re-renders the iframe; deferring lets fast typing skip frames.
   const shown = React.useDeferredValue(email)
-  const bannerSrc = useBannerDataUrl(shown.bannerId)
+  const rendered = React.useMemo(
+    () =>
+      renderBlastEmail(shown, {
+        name: sampleName,
+        bannerSrc: shown.bannerId
+          ? withBasePath(`/api/blasts/banner/${shown.bannerId}`)
+          : "",
+        unsubscribeUrl: "#",
+      }).html,
+    [shown, sampleName]
+  )
+  const assets = useAssetDataUrls(
+    React.useMemo(
+      () => [...rendered.matchAll(ASSET_RE)].map((m) => m[1]),
+      [rendered]
+    )
+  )
   const html = React.useMemo(() => {
-    const { html } = renderBlastEmail(shown, {
-      name: sampleName,
-      bannerSrc,
-      unsubscribeUrl: "#",
-    })
+    const local = rendered.replace(
+      ASSET_RE,
+      (_, id: string) => assets[id] ?? BLANK_GIF
+    )
     // Links open in a new tab instead of inside the preview.
-    return html.replace("<head>", '<head><base target="_blank">')
-  }, [shown, bannerSrc, sampleName])
+    const base = '<base target="_blank">'
+    return /<head\b[^>]*>/i.test(local)
+      ? local.replace(/<head\b[^>]*>/i, (tag) => tag + base)
+      : base + local
+  }, [rendered, assets])
   const subject = email.subject.replaceAll(
     BLAST_PLACEHOLDER,
     sampleName || "there"

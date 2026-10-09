@@ -101,6 +101,24 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   remove the last file when there are no sheets). `loadAudience` and the browser
   (`useListContacts`, shaped as `AudienceLead` with `sheetIds: [listId]`) merge both, one
   row per address. Deleting a blast deletes its files.
+- **Custom designs** (`email.design: "standard" | "custom"`, `email.html`): a client's own
+  finished email (HTML) instead of Ops' layout. `lib/blasts/html.ts` (pure, tested) finds
+  and edits links and images by string surgery so the designer's markup is untouched
+  (comments are masked, so Outlook-only blocks aren't listed), strips scripts/frames/
+  forms/on* handlers/javascript: links, adds https:// to bare links, and makes the text
+  version. In the editor (`components/blasts/custom-design.tsx`) the .html is dropped
+  together with its images: local `src`s are matched by file name, uploaded through
+  `/api/blasts/banner` (blastAssets, deleted with the blast) and rewritten to public links.
+  The **Links** list edits every href in place (button redirects, UTM links). Saving
+  refuses broken links; SENDING also needs every link filled (no "#") and no local images.
+  `{name}` and `{unsubscribe_url}` work in the HTML; without `{unsubscribe_url}` an
+  Unsubscribe line is added before `</body>`. Switching layouts keeps both versions.
+- **Preview must never re-download images**: the preview iframe is sandboxed (opaque
+  origin, no shared cache), so it rebuilds on every keystroke and re-fetched the banner
+  each time. That burst made Vercel's Security Checkpoint challenge the office IP and
+  saves failed with a bare 403 (`x-vercel-mitigated: challenge`). Every uploaded image
+  is fetched once and inlined as a data: URL (`useAssetDataUrls` in `email-tab.tsx`).
+  `apiPost` reports non-JSON errors as "blocked on the way".
 - **Unsubscribe**: every email has an Unsubscribe link (`/unsubscribe?b&e&t`, public page
   outside the auth gate; nothing happens until the person presses the button, because
   link scanners open links) and `List-Unsubscribe` + `List-Unsubscribe-Post` one-click

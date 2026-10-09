@@ -2,6 +2,22 @@
 // editor's live preview, the test send and the real send all produce exactly
 // the same email, and `npm test` covers it.
 
+import {
+  cleanHtml,
+  fileNameOf,
+  findImages,
+  findLinks,
+  htmlToText,
+  isLocalSrc,
+  linkProblem,
+  UNSUBSCRIBE_PLACEHOLDER,
+  withScheme,
+} from "./html.ts"
+
+/** "standard" = Ops' own layout from the fields below; "custom" = the
+ * client's finished design (HTML) in `html`. */
+export type BlastDesign = "standard" | "custom"
+
 export interface BlastEmail {
   fromName: string
   fromEmail: string
@@ -21,6 +37,9 @@ export interface BlastEmail {
   buttonColor: string
   /** Small print under the email: who it's from, an address. */
   footer: string
+  design: BlastDesign
+  /** The custom design. Kept even while the standard layout is chosen. */
+  html: string
 }
 
 export type BlastEmailField = keyof BlastEmail
@@ -36,7 +55,12 @@ export const BLAST_LIMITS = {
   buttonLabel: 40,
   footer: 600,
   url: 2000,
+  html: 200_000,
 } as const
+
+/** Gmail cuts emails off after about 102 KB of HTML, hiding what's below
+ * (including the Unsubscribe link). */
+export const HTML_CLIP_WARNING = 100_000
 
 export const DEFAULT_BUTTON_COLOR = "#0272e2"
 
@@ -60,22 +84,14 @@ export function defaultBlastEmail(sender: {
     buttonUrl: "",
     buttonColor: DEFAULT_BUTTON_COLOR,
     footer: sender.signature,
+    design: "standard",
+    html: "",
   }
 }
 
 const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i
 const URL_RE = /^(https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+|tel:\+?[\d\s()-]+)$/i
 const COLOR_RE = /^#[0-9a-f]{6}$/i
-
-/** "thinktx.my/updates" → "https://thinktx.my/updates": links are often pasted
- * without the scheme. Anything else (mailto:, tel:, a typo) is left for the
- * link check to report. */
-function withScheme(raw: string): string {
-  const url = raw.trim()
-  return /^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#:]|$)/i.test(url)
-    ? `https://${url}`
-    : url
-}
 
 /**
  * Checks a blast email. `sending` adds what a real send needs (sender,
@@ -107,6 +123,8 @@ export function validateBlastEmail(
     buttonUrl: withScheme(str("buttonUrl")),
     buttonColor: str("buttonColor").trim() || DEFAULT_BUTTON_COLOR,
     footer: str("footer").replace(/\r\n?/g, "\n").trim(),
+    design: str("design") === "custom" ? "custom" : "standard",
+    html: str("html").trim() ? cleanHtml(str("html")).trim() : "",
   }
   const e: Partial<Record<BlastEmailField, string>> = {}
   const tooLong = (k: BlastEmailField, max: number) => {
@@ -139,14 +157,48 @@ export function validateBlastEmail(
     e.buttonColor = "Use a colour like #0272e2."
   if (email.bannerId && !/^[A-Za-z0-9]{10,40}$/.test(email.bannerId))
     e.bannerId = "Upload the banner again."
+  if (email.html.length > BLAST_LIMITS.html)
+    e.html = "This design is too big. Keep it under 200 KB."
+  else if (email.design === "custom") {
+    const problem = designProblem(email.html, sending)
+    if (problem) e.html = problem
+  }
   if (sending) {
     if (!email.fromName) e.fromName ??= "Who is this email from?"
     if (!email.fromEmail) e.fromEmail ??= "Which address does it come from?"
     if (!email.subject) e.subject ??= "Write a subject line."
-    if (!email.body.replace(new RegExp(`Hi ${BLAST_PLACEHOLDER},?`), "").trim())
+    if (
+      email.design === "standard" &&
+      !email.body.replace(new RegExp(`Hi ${BLAST_PLACEHOLDER},?`), "").trim()
+    )
       e.body ??= "Write the email."
   }
   return Object.keys(e).length ? { ok: false, errors: e } : { ok: true, email }
+}
+
+/** Why a custom design can't be saved (or, when `sending`, sent) yet. */
+function designProblem(html: string, sending: boolean): string {
+  if (!html) return sending ? "Add your design." : ""
+  const bad = findLinks(html).filter((l) => {
+    const p = linkProblem(l.url)
+    return p && (sending || p !== "Needs a link")
+  })
+  if (bad.length)
+    return bad.length === 1
+      ? `Check the link “${bad[0].text}” under Links.`
+      : `Check ${bad.length} links under Links.`
+  if (sending) {
+    const missing = [
+      ...new Set(
+        findImages(html)
+          .filter((i) => isLocalSrc(i.src))
+          .map((i) => fileNameOf(i.src))
+      ),
+    ]
+    if (missing.length)
+      return `Upload the missing image${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`
+  }
+  return ""
 }
 
 // ── Rendering ──────────────────────────────────────────────────────────────
@@ -257,6 +309,8 @@ export function renderBlastEmail(
   email: BlastEmail,
   { name, bannerSrc, unsubscribeUrl }: RenderOptions
 ): { subject: string; html: string; text: string } {
+  if (email.design === "custom")
+    return renderCustom(email, { name, unsubscribeUrl })
   const color = COLOR_RE.test(email.buttonColor)
     ? email.buttonColor
     : DEFAULT_BUTTON_COLOR
@@ -325,6 +379,49 @@ ${footer}You're getting this because you got in touch with ${esc(email.fromName 
     .filter(Boolean)
     .join("\n\n")
 
+  return { subject, html, text }
+}
+
+/** A custom design, personalised. The design's own Unsubscribe link (href
+ * "{unsubscribe_url}") is used when it has one; otherwise a small line is
+ * added at the bottom, because every email needs one. */
+function renderCustom(
+  email: BlastEmail,
+  { name, unsubscribeUrl }: Pick<RenderOptions, "name" | "unsubscribeUrl">
+): { subject: string; html: string; text: string } {
+  const subject = fill(email.subject, name)
+  let html = email.html
+  if (!/<html[\s>]/i.test(html))
+    html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(subject)}</title>
+</head>
+<body style="margin:0;padding:0;">
+${html}
+</body>
+</html>`
+  if (!html.includes(UNSUBSCRIBE_PLACEHOLDER)) {
+    const line = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:20px 24px;font-family:${FONT};font-size:12px;line-height:1.6;color:#6b7280;text-align:center;">You're getting this because you got in touch with ${esc(email.fromName || "us")}.<br><a href="${UNSUBSCRIBE_PLACEHOLDER}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a></td></tr></table>`
+    const at = html.search(/<\/body\s*>(?![\s\S]*<\/body)/i)
+    html =
+      at >= 0 ? html.slice(0, at) + line + "\n" + html.slice(at) : html + line
+  }
+  if (email.preheader)
+    html = html.replace(
+      /<body\b[^>]*>/i,
+      (tag) =>
+        `${tag}\n<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${esc(email.preheader)}${"&#847;&zwnj;&nbsp;".repeat(40)}</div>`
+    )
+  // Names come from imported sheets: escaped, and put in last.
+  html = html
+    .replaceAll(UNSUBSCRIBE_PLACEHOLDER, esc(unsubscribeUrl))
+    .replaceAll(BLAST_PLACEHOLDER, esc(name || "there"))
+  let text = htmlToText(html)
+  if (!text.includes(unsubscribeUrl))
+    text += `\n\nUnsubscribe: ${unsubscribeUrl}`
   return { subject, html, text }
 }
 

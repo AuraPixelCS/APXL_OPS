@@ -51,7 +51,9 @@ page proxies `/ops` to `apxl-ops.vercel.app/ops`.
   and the space where the email conversation will appear
 - **Email blasts**: pick sheets (or upload a file of people just for that blast; they stay
   out of Leads), write the email (sender, subject, banner, message,
-  button, footer) with a live preview and a test send, then send in rounds: pick the next
+  button, footer) or drop in the client's own design (an HTML file and its images, with
+  every link editable, e.g. a redirect for the button), check the live preview and send a
+  test, then send in rounds: pick the next
   100 not-sent people and send. Tracks who was sent, who failed and who unsubscribed;
   every email has a working Unsubscribe link
 - **Settings → Users**: add admins and clients, edit them, change roles, set or generate
