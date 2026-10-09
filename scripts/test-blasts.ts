@@ -16,6 +16,9 @@ import {
   replaceImageSrc,
   setLinkUrl,
 } from "../lib/blasts/html.ts"
+import { randomBytes } from "node:crypto"
+import { canSendFrom, NO_RESEND, validateClient } from "../lib/clients.ts"
+import { openSecret, sealSecret, secretsReady } from "../lib/secrets.ts"
 import {
   buildRows,
   canSelect,
@@ -443,6 +446,64 @@ ok(
     '<a href="https://thinktx.my"><img src="l.png" alt="ThinkTx"></a><p>Hi</p>'
   ) === "ThinkTx\n\nHi",
   "a linked logo becomes its alt text in the text version"
+)
+
+// Clients: sealed Resend keys, details, which domains an account can send from
+delete process.env.OPS_SECRETS_KEY
+ok(!secretsReady(), "no OPS_SECRETS_KEY: keys can't be stored")
+process.env.OPS_SECRETS_KEY = randomBytes(32).toString("base64")
+const sealedKey = sealSecret("re_test_1234567890")
+ok(
+  secretsReady() &&
+    sealedKey.startsWith("v1:") &&
+    !sealedKey.includes("re_test") &&
+    openSecret(sealedKey) === "re_test_1234567890",
+  "a key is sealed (not readable as text) and opens again"
+)
+ok(sealSecret("same") !== sealSecret("same"), "sealing twice never looks the same")
+const [v1, iv, tag, data] = sealedKey.split(":")
+const flipped = Buffer.from(data, "base64")
+flipped[0] ^= 1
+ok(
+  openSecret([v1, iv, tag, flipped.toString("base64")].join(":")) === null,
+  "a tampered key won't open"
+)
+process.env.OPS_SECRETS_KEY = randomBytes(32).toString("base64")
+ok(openSecret(sealedKey) === null, "a different OPS_SECRETS_KEY can't open it")
+const cv = validateClient({
+  name: "  ThinkTx  ",
+  fromName: "ThinkTx",
+  fromEmail: "INFO@thinktx.my ",
+  replyTo: "",
+  footer: "Suite B-16-3\r\nKuala Lumpur",
+})
+ok(
+  cv.ok &&
+    cv.client.name === "ThinkTx" &&
+    cv.client.fromEmail === "info@thinktx.my" &&
+    cv.client.footer === "Suite B-16-3\nKuala Lumpur",
+  "client details are tidied"
+)
+const bad = validateClient({ name: "", fromName: 'A "B"', fromEmail: "nope" })
+ok(
+  !bad.ok && bad.errors.name && bad.errors.fromName && bad.errors.fromEmail,
+  "client needs a name, a clean sender name and a real address"
+)
+const tx = { ...NO_RESEND, connected: true, domains: ["thinktx.my"] }
+ok(
+  canSendFrom(tx, "info@thinktx.my") &&
+    !canSendFrom(tx, "news@mail.thinktx.my") &&
+    !canSendFrom(tx, "hello@aurapixel.live"),
+  "an account sends only from its exact verified domains"
+)
+ok(
+  canSendFrom({ ...tx, restricted: true, domains: [] }, "x@anything.co"),
+  "a sending-only key (domains unknown) isn't second-guessed"
+)
+ok(
+  validateBlastEmail({ ...base, clientId: "Ab12Cd34Ef56Gh78" }).ok &&
+    !validateBlastEmail({ ...base, clientId: "../secrets" }).ok,
+  "a blast's client tag must be a plain id"
 )
 
 console.log(`blasts: ${passed} checks passed`)

@@ -1,5 +1,7 @@
-// Sends email through Resend (server only). The key lives in RESEND_API_KEY:
-// set it with `npm run setup:email`, never in settings or the database.
+// Sends email through Resend (server only). AuraPixel's own key lives in
+// RESEND_API_KEY (`npm run setup:email`); a client's key is sealed in
+// clientSecrets and picked by `sendingAccount` (lib/clients-server.ts).
+import type { SendingAccount } from "@/lib/clients-server"
 
 const API = "https://api.resend.com"
 /** Resend's batch endpoint takes at most 100 emails per call. */
@@ -22,8 +24,13 @@ export interface OutgoingEmail {
 
 type ResendError = { statusCode?: number; name?: string; message?: string }
 
-/** Turns Resend's error into something the admin can act on. */
-export function resendErrorMessage(status: number, body: ResendError): string {
+/** Turns Resend's error into something the admin can act on. `who` names a
+ * client whose account it was ("" = AuraPixel's). */
+export function resendErrorMessage(
+  status: number,
+  body: ResendError,
+  who = ""
+): string {
   const name = body.name ?? ""
   const msg = body.message ?? ""
   if (name === "daily_quota_exceeded")
@@ -37,27 +44,23 @@ export function resendErrorMessage(status: number, body: ResendError): string {
     name === "missing_api_key" ||
     name === "invalid_api_key"
   )
-    return "The Resend API key isn't valid. Run `npm run setup:email` in ap-ops to set it again."
+    return who
+      ? `${who}'s Resend key isn't valid any more. Paste a new one in Settings → Clients.`
+      : "The Resend API key isn't valid. Run `npm run setup:email` in ap-ops to set it again."
   if (/domain/i.test(msg) && /verif/i.test(msg))
     return `That sender address isn't on a domain verified in Resend. ${msg}`
   return msg || `Resend returned an error (${status}).`
 }
 
 async function post(
+  account: SendingAccount,
   path: string,
   payload: unknown,
   idempotencyKey?: string
 ): Promise<
   { ok: true; data: unknown } | { ok: false; error: string; status: number }
 > {
-  const key = process.env.RESEND_API_KEY
-  if (!key)
-    return {
-      ok: false,
-      status: 503,
-      error:
-        "Email sending isn't set up yet. Run `npm run setup:email` in ap-ops.",
-    }
+  const { key, who } = account
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`${API}${path}`, {
       method: "POST",
@@ -86,31 +89,33 @@ async function post(
     return {
       ok: false,
       status: res.status,
-      error: resendErrorMessage(res.status, body),
+      error: resendErrorMessage(res.status, body, who),
     }
   }
 }
 
 /** Sends up to 100 emails; returns one Resend id per email, in order. */
 export async function sendBatch(
+  account: SendingAccount,
   emails: OutgoingEmail[],
   idempotencyKey: string
 ): Promise<
   | { ok: true; ids: (string | null)[] }
   | { ok: false; error: string; status: number }
 > {
-  const r = await post("/emails/batch", emails, idempotencyKey)
+  const r = await post(account, "/emails/batch", emails, idempotencyKey)
   if (!r.ok) return r
   const data = (r.data as { data?: { id?: string }[] }).data ?? []
   return { ok: true, ids: emails.map((_, i) => data[i]?.id ?? null) }
 }
 
 export async function sendOne(
+  account: SendingAccount,
   email: OutgoingEmail
 ): Promise<
   { ok: true; id: string | null } | { ok: false; error: string; status: number }
 > {
-  const r = await post("/emails", email)
+  const r = await post(account, "/emails", email)
   if (!r.ok) return r
   return { ok: true, id: (r.data as { id?: string }).id ?? null }
 }

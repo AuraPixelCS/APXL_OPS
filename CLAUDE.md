@@ -101,6 +101,20 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   remove the last file when there are no sheets). `loadAudience` and the browser
   (`useListContacts`, shaped as `AudienceLead` with `sheetIds: [listId]`) merge both, one
   row per address. Deleting a blast deletes its files.
+- **Clients' own Resend accounts** (Settings → Clients, Mandy 2026-10-09): a client
+  (`clients/{id}`: name, sender name/email, reply-to, small print, `resend` status =
+  connected / last4 / verified domains / restricted) can send blasts through ITS OWN
+  Resend account. A blast is tagged with `email.clientId` ("Sends with" in New blast and
+  the Email tab; picking one swaps in that sender's details; "" = AuraPixel's
+  RESEND_API_KEY). The client's key is checked with Resend (`GET /domains`; a sending-only
+  key reports `restricted_api_key`, so domains are unknown and not checked), then SEALED
+  (AES-256-GCM, `lib/secrets.ts`, key = `OPS_SECRETS_KEY` from `npm run setup:secrets`,
+  never change it once keys are saved) into `clientSecrets/{id}`. firestore.rules deny
+  clientSecrets even to admins; only the Admin SDK reads it. `sendingAccount()`
+  (`lib/clients-server.ts`) picks the key for test + real sends and refuses a sender
+  outside the account's verified domains (exact match: Resend verifies subdomains
+  separately). A client in use by a blast can't be deleted. This deliberately relaxes the
+  old "no secrets in the database" rule for client keys only, sealed and server-only.
 - **People added by hand** ("Add a person" in Recipients or the blast menu): one email (+
   optional name) at a time, no file. They go in the blast's own list with the fixed id
   `handListId(blastId)` = `<blastId>-added` (`manual: true`, name "Added by hand"), so the
@@ -139,7 +153,7 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   and stored as bytes in `blastAssets/{id}` (Firestore 1 MiB doc limit; aurapixel-ops is
   on Spark with no Storage bucket), served publicly with a 1-year cache by
   `GET /api/blasts/banner/[id]`.
-- **Resend**: `RESEND_API_KEY` on Vercel (sensitive, production) + `.env.local`, set by
+- **Resend**: AuraPixel's own `RESEND_API_KEY` on Vercel (sensitive, production) + `.env.local`, set by
   `npm run setup:email` (Mandy runs it; it can reuse RSVP's key and redeploys). Sender
   addresses must be on a domain verified in Resend (aurapixel.live is). Without the key,
   sends and test sends return a 503 saying to run it. Testing: send to Resend's test

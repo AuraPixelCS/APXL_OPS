@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server"
 import { isEmailConfigured } from "@/lib/blasts/resend"
 import { verifyAdmin } from "@/lib/firebase/admin-guard"
+import { secretsReady } from "@/lib/secrets"
 
 export interface ConnectionStatus {
   database: { projectId: string | null }
@@ -13,6 +14,8 @@ export interface ConnectionStatus {
   n8n: boolean
   /** RESEND_API_KEY is set: email blasts can send. */
   email: boolean
+  /** OPS_SECRETS_KEY is set: clients' Resend keys can be stored. */
+  secrets: boolean
 }
 
 export async function POST(req: Request) {
@@ -28,6 +31,7 @@ export async function POST(req: Request) {
     assistant: Boolean(process.env.ANTHROPIC_API_KEY),
     n8n: Boolean(process.env.N8N_WEBHOOK_URL && process.env.OPS_WEBHOOK_SECRET),
     email: isEmailConfigured(),
+    secrets: secretsReady(),
   }
   return NextResponse.json(status)
 }

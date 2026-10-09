@@ -48,10 +48,10 @@ export function toBlast(id: string, d: DocumentData): Blast {
   }
 }
 
-type Live<T> = { data: T; loading: boolean; error: string | null }
+export type Live<T> = { data: T; loading: boolean; error: string | null }
 
 /** Subscribes while `key` stays the same; `key` null = nothing to load. */
-function useLive<T>(
+export function useLive<T>(
   key: string | null,
   empty: T,
   subscribe: (

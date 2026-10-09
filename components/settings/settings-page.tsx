@@ -1,6 +1,7 @@
 "use client"
 
 import { AssistantSettings } from "@/components/settings/assistant-settings"
+import { ClientsSettings } from "@/components/settings/clients-settings"
 import { Connections } from "@/components/settings/connections"
 import { EmailSettings } from "@/components/settings/email-settings"
 import { ScoringSettings } from "@/components/settings/scoring-settings"
@@ -11,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 const TABS = [
   { value: "users", label: "Users", content: <UsersSettings /> },
   { value: "email", label: "Email", content: <EmailSettings /> },
+  { value: "clients", label: "Clients", content: <ClientsSettings /> },
   { value: "assistant", label: "Assistant", content: <AssistantSettings /> },
   { value: "scoring", label: "Lead scoring", content: <ScoringSettings /> },
   { value: "connections", label: "Connections", content: <Connections /> },

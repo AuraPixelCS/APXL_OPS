@@ -39,6 +39,13 @@ export async function POST(req: Request) {
           400,
           checked.errors as Record<string, string>
         )
+      if (
+        checked.email.clientId &&
+        !(await db.doc(`clients/${checked.email.clientId}`).get()).exists
+      )
+        return fail("That client no longer exists.", 400, {
+          clientId: "Pick who it sends with again.",
+        })
       update.email = checked.email
     }
     if (!Object.keys(update).length) return fail("Nothing to save.")

@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation"
 import * as React from "react"
 import { DeleteDialog, RenameDialog } from "@/components/blasts/blast-page"
 import { ListUpload, type PickedList } from "@/components/blasts/list-upload"
+import { ClientSelect } from "@/components/blasts/send-with"
 import { SheetPicker } from "@/components/blasts/sheet-picker"
 import { DialogShell } from "@/components/common/dialog-shell"
 import { EmptyState } from "@/components/common/empty-state"
@@ -43,6 +44,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useBlasts } from "@/hooks/use-blasts"
+import { useClients } from "@/hooks/use-clients"
 import { useSheets } from "@/hooks/use-sheets"
 import { ApiError, apiPost } from "@/lib/api"
 import type { Blast } from "@/lib/blasts/types"
@@ -70,6 +72,11 @@ function clientsOf(b: Blast, sheetsById: Map<string, Sheet>): string {
 export function BlastsPage() {
   const { data: blasts, loading, error } = useBlasts()
   const { data: sheets } = useSheets()
+  const { data: clientProfiles } = useClients()
+  const sendsWith = React.useMemo(
+    () => new Map(clientProfiles.map((c) => [c.id, c.name])),
+    [clientProfiles]
+  )
   const [creating, setCreating] = React.useState(false)
   const [acting, setActing] = React.useState<{
     action: "rename" | "delete"
@@ -148,6 +155,7 @@ export function BlastsPage() {
                       key={b.id}
                       blast={b}
                       clients={clientsOf(b, sheetsById)}
+                      sendsWith={sendsWith.get(b.email.clientId)}
                       onAction={run}
                     />
                   ))}
@@ -175,6 +183,11 @@ export function BlastsPage() {
                             ? `${b.sentCount.toLocaleString()} sent`
                             : "Not sent yet"}
                         </Badge>
+                        {sendsWith.get(b.email.clientId) && (
+                          <Badge variant="secondary">
+                            {sendsWith.get(b.email.clientId)}
+                          </Badge>
+                        )}
                         <span className="truncate">
                           {clientsOf(b, sheetsById) ||
                             `${b.sheetIds.length} sheets`}
@@ -254,10 +267,13 @@ function RowMenu({
 function BlastRow({
   blast: b,
   clients,
+  sendsWith,
   onAction,
 }: {
   blast: Blast
   clients: string
+  /** The client whose Resend it sends with, if not AuraPixel's. */
+  sendsWith?: string
   onAction: (a: Action, b: Blast) => void
 }) {
   const router = useRouter()
@@ -267,13 +283,20 @@ function BlastRow({
       onClick={() => router.push(blastHref(b))}
     >
       <TableCell className="max-w-96">
-        <Link
-          href={blastHref(b)}
-          className="block truncate font-medium outline-none hover:underline focus-visible:underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {b.name}
-        </Link>
+        <div className="flex min-w-0 items-center gap-2">
+          <Link
+            href={blastHref(b)}
+            className="truncate font-medium outline-none hover:underline focus-visible:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {b.name}
+          </Link>
+          {sendsWith && (
+            <Badge variant="secondary" className="shrink-0">
+              {sendsWith}
+            </Badge>
+          )}
+        </div>
         <span className="block truncate text-xs text-muted-foreground">
           {b.email.subject || "No subject yet"}
         </span>
@@ -326,6 +349,8 @@ function NewBlastDialog({
   )
   const [sheetIds, setSheetIds] = React.useState<string[]>([])
   const [list, setList] = React.useState<PickedList | null>(null)
+  const [clientId, setClientId] = React.useState("")
+  const { data: clientProfiles } = useClients()
   const [errors, setErrors] = React.useState<{
     name?: string
     sheetIds?: string
@@ -345,7 +370,9 @@ function NewBlastDialog({
     try {
       const { id } = await apiPost<{ id: string }>(
         "/api/blasts/create",
-        source === "sheets" ? { name, sheetIds } : { name, sheetIds: [], list }
+        source === "sheets"
+          ? { name, sheetIds, clientId }
+          : { name, sheetIds: [], list, clientId }
       )
       onClose()
       router.push(`/blasts/${id}?tab=email`)
@@ -389,6 +416,13 @@ function NewBlastDialog({
         }}
         error={errors.name}
       />
+      {clientProfiles.length > 0 && (
+        <ClientSelect
+          clients={clientProfiles}
+          value={clientId}
+          onChange={setClientId}
+        />
+      )}
       <div className="flex min-w-0 flex-col gap-3">
         <p className="text-sm font-medium">Who&rsquo;s it for?</p>
         <FilterTabs

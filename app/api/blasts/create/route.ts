@@ -1,10 +1,11 @@
-// POST /api/blasts/create { name, sheetIds?, list? } → { id }
+// POST /api/blasts/create { name, sheetIds?, list?, clientId? } → { id }
 // Who it goes to: imported sheets, or a file uploaded just for this blast
 // (`list`: { fileName, tabName, name, rows }), or both. A new blast starts with
-// the sender from Settings → Email and an empty email.
+// the sender from Settings → Email (or the client's, when it sends with a
+// client from Settings → Clients) and an empty email.
 import { FieldValue } from "firebase-admin/firestore"
 import { NextResponse } from "next/server"
-import { adminRoute, fail } from "@/lib/admin-route"
+import { adminRoute, fail, stringField } from "@/lib/admin-route"
 import { defaultBlastEmail } from "@/lib/blasts/email"
 import {
   checkBlastName,
@@ -27,13 +28,27 @@ export async function POST(req: Request) {
 
     const saved = (await db.doc("settings/email").get()).data() ?? {}
     const sender = { ...DEFAULT_SETTINGS.email, ...saved }
+    const clientId = stringField(body, "clientId") ?? ""
+    const client = clientId ? await db.doc(`clients/${clientId}`).get() : null
+    if (clientId && !client?.exists)
+      return fail("That client no longer exists.", 400, {
+        clientId: "Pick who it sends with again.",
+      })
+    const email = defaultBlastEmail(sender)
+    if (client?.exists) {
+      email.clientId = client.id
+      for (const k of ["fromName", "fromEmail", "replyTo", "footer"] as const) {
+        const v = client.get(k)
+        if (typeof v === "string" && v) email[k] = v
+      }
+    }
     const by = admin.email ?? admin.uid
     const ref = db.collection("blasts").doc()
     await ref.set({
       name: name.name,
       sheetIds: sheets.sheetIds,
       listIds: [],
-      email: defaultBlastEmail(sender),
+      email,
       sentCount: 0,
       lastSentAt: null,
       createdBy: by,

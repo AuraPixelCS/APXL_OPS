@@ -33,6 +33,7 @@ page proxies `/ops` to `apxl-ops.vercel.app/ops`.
 | `npm run grant-admin -- you@example.com` | Gives an existing account admin access (real project) |
 | `npm run deploy:rules` | Publishes the database security rules (real project) |
 | `npm run setup:email` | One-time: puts the Resend API key on Vercel (and in `.env.local`) so email blasts can send (`-- --check` to look only) |
+| `npm run setup:secrets` | One-time: makes the key that seals clients' Resend keys (Settings → Clients) on Vercel and in `.env.local` (`-- --check` to look only) |
 | `npm run setup:vercel-access` | One-time: lets the Vercel deployment use the database without a key file (`-- --check` to look only) |
 | `npm test` | Tests the lead-cleaning rules. Add a CSV path to summarise a file |
 | `npm run typecheck` / `npm run lint` | Code checks |

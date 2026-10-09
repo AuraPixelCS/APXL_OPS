@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import * as React from "react"
 import { CustomDesign } from "@/components/blasts/custom-design"
+import { SendWithField } from "@/components/blasts/send-with"
 import type { BlastEmailForm } from "@/components/blasts/use-blast-email-form"
 import { useAuth } from "@/components/auth/auth-provider"
 import { DialogShell } from "@/components/common/dialog-shell"
@@ -81,6 +82,7 @@ export function EmailTab({
           )}
         >
           <SectionCard title="From">
+            <SendWithField form={form} />
             <TextField
               label="Sender name"
               value={v.fromName}

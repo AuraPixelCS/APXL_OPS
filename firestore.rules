@@ -4,6 +4,7 @@ rules_version = '2';
 //   leads/{leadId}                    one person who enquired
 //   leads/{leadId}/messages/{msgId}   the email thread with them (later)
 //   imports/{importId}                one CSV upload: file name, counts, who
+//   clients/{clientId}                a client we send email for (no secrets)
 //
 // Admins (Firebase Auth users with the `admin` custom claim) READ directly from
 // the browser so lists update live. Every WRITE goes through our API routes with
@@ -14,8 +15,10 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.admin == true;
     }
 
-    match /{document=**} {
-      allow read: if isAdmin();
+    // clientSecrets/{clientId}: clients' sealed Resend keys. Server only, even
+    // for admins (the Admin SDK bypasses these rules).
+    match /{collection}/{document=**} {
+      allow read: if isAdmin() && collection != "clientSecrets";
       allow write: if false;
     }
   }

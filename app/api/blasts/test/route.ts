@@ -6,6 +6,7 @@ import { adminRoute, fail, stringField } from "@/lib/admin-route"
 import { renderBlastEmail, validateBlastEmail } from "@/lib/blasts/email"
 import { fromHeader, sendOne } from "@/lib/blasts/resend"
 import { bannerUrl, TEST_UNSUBSCRIBE_URL } from "@/lib/blasts/urls"
+import { sendingAccount } from "@/lib/clients-server"
 
 const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i
 
@@ -30,13 +31,21 @@ export async function POST(req: Request) {
         to: "Enter a full email address.",
       })
 
+    const acct = await sendingAccount(db, email.clientId, email.fromEmail)
+    if (!acct.ok)
+      return fail(
+        acct.error,
+        acct.status,
+        acct.field ? { [acct.field]: acct.error } : undefined
+      )
+
     const firstName = String(admin.name ?? "").split(/\s+/)[0] ?? ""
     const r = renderBlastEmail(email, {
       name: firstName,
       bannerSrc: bannerUrl(email.bannerId),
       unsubscribeUrl: TEST_UNSUBSCRIBE_URL,
     })
-    const sent = await sendOne({
+    const sent = await sendOne(acct.account, {
       from: fromHeader(email.fromName, email.fromEmail),
       to: [to],
       subject: `[Test] ${r.subject}`,

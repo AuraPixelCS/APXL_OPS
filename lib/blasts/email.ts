@@ -40,6 +40,8 @@ export interface BlastEmail {
   design: BlastDesign
   /** The custom design. Kept even while the standard layout is chosen. */
   html: string
+  /** Sends through this client's Resend (Settings → Clients); "" = AuraPixel's. */
+  clientId: string
 }
 
 export type BlastEmailField = keyof BlastEmail
@@ -86,6 +88,7 @@ export function defaultBlastEmail(sender: {
     footer: sender.signature,
     design: "standard",
     html: "",
+    clientId: "",
   }
 }
 
@@ -125,6 +128,7 @@ export function validateBlastEmail(
     footer: str("footer").replace(/\r\n?/g, "\n").trim(),
     design: str("design") === "custom" ? "custom" : "standard",
     html: str("html").trim() ? cleanHtml(str("html")).trim() : "",
+    clientId: str("clientId").trim(),
   }
   const e: Partial<Record<BlastEmailField, string>> = {}
   const tooLong = (k: BlastEmailField, max: number) => {
@@ -157,6 +161,8 @@ export function validateBlastEmail(
     e.buttonColor = "Use a colour like #0272e2."
   if (email.bannerId && !/^[A-Za-z0-9]{10,40}$/.test(email.bannerId))
     e.bannerId = "Upload the banner again."
+  if (email.clientId && !/^[A-Za-z0-9]{10,40}$/.test(email.clientId))
+    e.clientId = "Pick who it sends with again."
   if (email.html.length > BLAST_LIMITS.html)
     e.html = "This design is too big. Keep it under 200 KB."
   else if (email.design === "custom") {

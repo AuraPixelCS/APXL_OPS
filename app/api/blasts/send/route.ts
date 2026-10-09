@@ -34,6 +34,7 @@ import {
   oneClickUnsubscribeUrl,
   unsubscribePageUrl,
 } from "@/lib/blasts/urls"
+import { sendingAccount } from "@/lib/clients-server"
 
 /** A "sending" claim older than this is treated as abandoned. */
 const STALE_CLAIM_MS = 10 * 60_000
@@ -71,6 +72,13 @@ export async function POST(req: Request) {
         checked.errors as Record<string, string>
       )
     const email = checked.email
+    const acct = await sendingAccount(db, email.clientId, email.fromEmail)
+    if (!acct.ok)
+      return fail(
+        acct.error,
+        acct.status,
+        acct.field ? { [acct.field]: acct.error } : undefined
+      )
 
     const requested = [
       ...new Set(
@@ -179,7 +187,11 @@ export async function POST(req: Request) {
           tags: [{ name: "blast", value: id }],
         }
       })
-      const res = await sendBatch(outgoing, `blast-${id}-${nonce}-${i}`)
+      const res = await sendBatch(
+        acct.account,
+        outgoing,
+        `blast-${id}-${nonce}-${i}`
+      )
       if (res.ok) {
         chunk.forEach((c, j) =>
           batch.set(
