@@ -281,7 +281,7 @@ function BlastMenu({ onPick }: { onPick: (d: Dialog) => void }) {
   )
 }
 
-function RenameDialog({
+export function RenameDialog({
   blast,
   onClose,
 }: {
@@ -366,6 +366,7 @@ function SheetsDialog({
       open
       onClose={onClose}
       title="Change sheets"
+      size="xl"
       description="Add a new month's sheet to keep sending from the same blast. Removing a sheet doesn't undo anything: people already sent to stay in the Sent list."
       footer={
         <>
@@ -392,7 +393,7 @@ function SheetsDialog({
   )
 }
 
-function DeleteDialog({
+export function DeleteDialog({
   blast,
   onClose,
 }: {

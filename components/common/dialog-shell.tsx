@@ -22,6 +22,7 @@ export function DialogShell({
   description,
   children,
   footer,
+  size,
 }: {
   open: boolean
   onClose: () => void
@@ -29,12 +30,16 @@ export function DialogShell({
   description?: string
   children: React.ReactNode
   footer: React.ReactNode
+  /** Wider dialogs for lists (e.g. picking sheets). Phones always get a full-width sheet. */
+  size?: "md" | "xl"
 }) {
   return (
     <Dialog open={open} onOpenChange={(d) => !d.open && onClose()}>
-      <DialogContent>
+      <DialogContent size={size}>
         <DialogHeader title={title} description={description} />
-        <DialogBody className="flex flex-col gap-5">{children}</DialogBody>
+        <DialogBody className="flex min-w-0 flex-col gap-5">
+          {children}
+        </DialogBody>
         <DialogFooter>{footer}</DialogFooter>
       </DialogContent>
     </Dialog>

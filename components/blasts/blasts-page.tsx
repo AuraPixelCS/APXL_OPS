@@ -6,12 +6,16 @@ import {
   ChevronRightIcon,
   FileSpreadsheetIcon,
   MailIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
   PlusIcon,
+  Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import * as React from "react"
+import { DeleteDialog, RenameDialog } from "@/components/blasts/blast-page"
 import { SheetPicker } from "@/components/blasts/sheet-picker"
 import { DialogShell } from "@/components/common/dialog-shell"
 import { EmptyState } from "@/components/common/empty-state"
@@ -20,6 +24,13 @@ import { AppShell } from "@/components/shell/app-shell"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+} from "@/components/ui/menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -39,6 +50,8 @@ import type { Sheet } from "@/lib/leads/sheets"
 
 const blastHref = (b: Blast) => `/blasts/${b.id}`
 
+type Action = "open" | "rename" | "delete"
+
 /** "Skill2U, PEOPLElogy" for a blast's sheets. */
 function clientsOf(b: Blast, sheetsById: Map<string, Sheet>): string {
   const names = new Set(
@@ -51,6 +64,16 @@ export function BlastsPage() {
   const { data: blasts, loading, error } = useBlasts()
   const { data: sheets } = useSheets()
   const [creating, setCreating] = React.useState(false)
+  const [acting, setActing] = React.useState<{
+    action: "rename" | "delete"
+    blast: Blast
+  } | null>(null)
+  const router = useRouter()
+
+  function run(action: Action, blast: Blast) {
+    if (action === "open") router.push(blastHref(blast))
+    else setActing({ action, blast })
+  }
   const sheetsById = React.useMemo(
     () => new Map(sheets.map((s) => [s.id, s])),
     [sheets]
@@ -127,8 +150,8 @@ export function BlastsPage() {
                     <TableHead>Sheets</TableHead>
                     <TableHead className="text-right">Sent</TableHead>
                     <TableHead className="text-right">Last sent</TableHead>
-                    <TableHead className="w-10">
-                      <span className="sr-only">Open</span>
+                    <TableHead className="w-14">
+                      <span className="sr-only">Actions</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -138,6 +161,7 @@ export function BlastsPage() {
                       key={b.id}
                       blast={b}
                       clients={clientsOf(b, sheetsById)}
+                      onAction={run}
                     />
                   ))}
                 </TableBody>
@@ -145,10 +169,13 @@ export function BlastsPage() {
             </div>
             <ul className="flex flex-col gap-2 md:hidden">
               {blasts.map((b) => (
-                <li key={b.id}>
+                <li
+                  key={b.id}
+                  className="flex items-center gap-1 rounded-xl border bg-card"
+                >
                   <Link
                     href={blastHref(b)}
-                    className="flex min-h-16 items-center gap-3 rounded-xl border bg-card px-4 py-3 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 active:bg-accent"
+                    className="flex min-h-16 min-w-0 flex-1 items-center gap-3 rounded-s-xl py-3 ps-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 active:bg-accent"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{b.name}</p>
@@ -172,6 +199,9 @@ export function BlastsPage() {
                       aria-hidden
                     />
                   </Link>
+                  <div className="pe-1">
+                    <RowMenu blast={b} onAction={run} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -179,6 +209,12 @@ export function BlastsPage() {
         )}
       </div>
 
+      {acting?.action === "rename" && (
+        <RenameDialog blast={acting.blast} onClose={() => setActing(null)} />
+      )}
+      {acting?.action === "delete" && (
+        <DeleteDialog blast={acting.blast} onClose={() => setActing(null)} />
+      )}
       {creating && (
         <NewBlastDialog
           sheets={sheets}
@@ -190,7 +226,53 @@ export function BlastsPage() {
   )
 }
 
-function BlastRow({ blast: b, clients }: { blast: Blast; clients: string }) {
+function RowMenu({
+  blast,
+  onAction,
+}: {
+  blast: Blast
+  onAction: (a: Action, b: Blast) => void
+}) {
+  return (
+    <Menu onSelect={(d) => onAction(d.value as Action, blast)}>
+      <MenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xl"
+          aria-label={`Actions for ${blast.name}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontalIcon />
+        </Button>
+      </MenuTrigger>
+      <MenuContent className="min-w-52">
+        <MenuItem value="open">
+          <MailIcon />
+          Open
+        </MenuItem>
+        <MenuItem value="rename">
+          <PencilIcon />
+          Rename
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem value="delete" variant="destructive">
+          <Trash2Icon />
+          Delete blast
+        </MenuItem>
+      </MenuContent>
+    </Menu>
+  )
+}
+
+function BlastRow({
+  blast: b,
+  clients,
+  onAction,
+}: {
+  blast: Blast
+  clients: string
+  onAction: (a: Action, b: Blast) => void
+}) {
   const router = useRouter()
   return (
     <TableRow
@@ -224,11 +306,8 @@ function BlastRow({ blast: b, clients }: { blast: Blast; clients: string }) {
       >
         {b.lastSentAt ? formatRelative(b.lastSentAt) : "Not yet"}
       </TableCell>
-      <TableCell>
-        <ChevronRightIcon
-          className="size-4 text-muted-foreground"
-          aria-hidden
-        />
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <RowMenu blast={b} onAction={onAction} />
       </TableCell>
     </TableRow>
   )
@@ -284,6 +363,7 @@ function NewBlastDialog({
       open
       onClose={onClose}
       title="New email blast"
+      size="xl"
       description="Name it, pick who it goes to. You'll write the email next; nothing is sent until you press Send."
       footer={
         <>
