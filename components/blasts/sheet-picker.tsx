@@ -152,8 +152,8 @@ export function SheetPicker({
       >
         {error ??
           (value.length
-            ? `${value.length} ${value.length === 1 ? "sheet" : "sheets"} picked, ${pickedLeads.toLocaleString()} ${pickedLeads === 1 ? "lead" : "leads"}${value.length > 1 ? " (people in two sheets are only emailed once)" : ""}${full ? ". That's the most a blast can have" : ""}.`
-            : "Pick the sheets whose leads this blast goes to.")}
+            ? `${value.length} ${value.length === 1 ? "sheet" : "sheets"} picked, ${pickedLeads.toLocaleString()} ${pickedLeads === 1 ? "lead" : "leads"}${full ? ". That's the most a blast can have" : ""}.`
+            : "No sheets picked.")}
       </p>
     </div>
   )

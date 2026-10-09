@@ -99,15 +99,9 @@ export function BlastsPage() {
       actions={blasts.length > 0 && newButton("lg")}
     >
       <div className="flex flex-col gap-5 page-x py-5 sm:py-6">
-        <div>
-          <h1 className="font-heading text-xl font-semibold tracking-tight">
-            Email blasts
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Each blast has its own email and remembers who it has been sent to,
-            so you can send in rounds: 100 today, the next 100 tomorrow.
-          </p>
-        </div>
+        <h1 className="font-heading text-xl font-semibold tracking-tight">
+          Email blasts
+        </h1>
 
         {error && (
           <Alert variant="destructive">
@@ -131,7 +125,6 @@ export function BlastsPage() {
           <EmptyState
             icon={MailIcon}
             title="No blasts yet"
-            body="Start one, choose who it goes to (your imported sheets, or a file you upload just for it), write the email, then send it to as many people at a time as you like."
             action={newButton("xl")}
           />
         ) : (
@@ -375,7 +368,6 @@ function NewBlastDialog({
       onClose={onClose}
       title="New email blast"
       size="xl"
-      description="Name it and choose who it goes to. You'll write the email next; nothing is sent until you press Send."
       footer={
         <>
           <Button variant="outline" size="xl" onClick={onClose} disabled={busy}>
@@ -396,7 +388,6 @@ function NewBlastDialog({
           setErrors((e) => ({ ...e, name: undefined }))
         }}
         error={errors.name}
-        helper="Only you and other admins see this."
       />
       <div className="flex min-w-0 flex-col gap-3">
         <p className="text-sm font-medium">Who&rsquo;s it for?</p>

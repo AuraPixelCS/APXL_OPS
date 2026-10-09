@@ -101,6 +101,15 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   remove the last file when there are no sheets). `loadAudience` and the browser
   (`useListContacts`, shaped as `AudienceLead` with `sheetIds: [listId]`) merge both, one
   row per address. Deleting a blast deletes its files.
+- **People added by hand** ("Add a person" in Recipients or the blast menu): one email (+
+  optional name) at a time, no file. They go in the blast's own list with the fixed id
+  `handListId(blastId)` = `<blastId>-added` (`manual: true`, name "Added by hand"), so the
+  audience, tracking and unsubscribe code treat them like an uploaded file, and they never
+  touch Leads. `POST /api/blasts/people/{add,remove}` (`addPerson`/`removePerson` in
+  `lib/blasts/server.ts`): adding refuses an address already anywhere in the blast (409);
+  removing the last one deletes the list unless it's the blast's only source.
+- **No explanatory copy on the blast screens** (Mandy, 2026-10-09): no page intros, card
+  descriptions or field hints. Labels, counts, errors and warnings only.
 - **Custom designs** (`email.design: "standard" | "custom"`, `email.html`): a client's own
   finished email (HTML) instead of Ops' layout. `lib/blasts/html.ts` (pure, tested) finds
   and edits links and images by string surgery so the designer's markup is untouched

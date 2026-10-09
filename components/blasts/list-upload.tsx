@@ -159,9 +159,6 @@ export function ListUpload({
               <>
                 <FileUploadDropzoneIcon />
                 <FileUploadTitle>Drop a file of people here</FileUploadTitle>
-                <FileUploadDescription>
-                  CSV or Excel, with an email column
-                </FileUploadDescription>
                 <FileUploadTrigger asChild>
                   <Button variant="outline" size="xl">
                     <FileSpreadsheetIcon />
@@ -234,10 +231,6 @@ export function ListUpload({
       {shownError && (
         <p className="text-sm text-destructive-foreground">{shownError}</p>
       )}
-      <p className="text-xs text-muted-foreground">
-        These people are only used for this blast. They aren&rsquo;t added to
-        Leads or Sheets.
-      </p>
     </div>
   )
 }

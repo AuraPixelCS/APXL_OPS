@@ -206,6 +206,7 @@ export function useBlastLists(blastId: string): Live<BlastList[]> {
               fileName: v.fileName ?? "",
               people: v.people ?? 0,
               canEmail: v.canEmail ?? 0,
+              manual: Boolean(v.manual),
               createdAt: toDate(v.createdAt),
             }
           })

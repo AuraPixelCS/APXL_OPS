@@ -20,12 +20,7 @@ import type { BlastEmailForm } from "@/components/blasts/use-blast-email-form"
 import { SectionCard } from "@/components/settings/form-bits"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import {
-  Field,
-  FieldError,
-  FieldHelper,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import {
   FileUpload,
   FileUploadDescription,
@@ -39,7 +34,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/toast"
 import { apiPost } from "@/lib/api"
-import { BLAST_PLACEHOLDER, HTML_CLIP_WARNING } from "@/lib/blasts/email"
+import { HTML_CLIP_WARNING } from "@/lib/blasts/email"
 import {
   cleanHtml,
   fileNameOf,
@@ -171,14 +166,10 @@ export function CustomDesign({
   }
 
   const sizeKb = Math.round(new Blob([html]).size / 1024)
-  const hasUnsubscribe = html.includes(UNSUBSCRIBE_PLACEHOLDER)
 
   return (
     <>
-      <SectionCard
-        title="Design"
-        description="The client's finished email as an HTML file, with the images it uses."
-      >
+      <SectionCard title="Design">
         {!html ? (
           <FileUpload
             key={round}
@@ -204,9 +195,6 @@ export function CustomDesign({
                   <FileUploadTitle>
                     Drop the .html file and its images
                   </FileUploadTitle>
-                  <FileUploadDescription>
-                    Images are uploaded and linked for you
-                  </FileUploadDescription>
                   <FileUploadTrigger asChild>
                     <Button variant="outline" size="xl">
                       <FileCodeIcon />
@@ -294,18 +282,7 @@ export function CustomDesign({
                   onChange={(e) => set("html", e.target.value)}
                   className="min-h-72 font-mono text-xs leading-relaxed"
                 />
-                <FieldHelper>
-                  {BLAST_PLACEHOLDER} becomes the person&rsquo;s first name. A
-                  link to {UNSUBSCRIBE_PLACEHOLDER} becomes their Unsubscribe
-                  link.
-                </FieldHelper>
               </Field>
-            )}
-            {!hasUnsubscribe && (
-              <p className="text-sm text-muted-foreground">
-                An Unsubscribe line is added at the bottom. To place it inside
-                the design, link some text to {UNSUBSCRIBE_PLACEHOLDER}.
-              </p>
             )}
           </div>
         )}
@@ -325,10 +302,7 @@ export function CustomDesign({
       )}
 
       {html && images.length > 0 && (
-        <SectionCard
-          title="Images"
-          description="Every image in the design. Replace one by uploading a new file."
-        >
+        <SectionCard title="Images">
           {missing.length > 0 && (
             <Alert variant="warning">
               <TriangleAlertIcon />
@@ -370,10 +344,7 @@ function LinksCard({
 }) {
   const seen = new Map<string, number>()
   return (
-    <SectionCard
-      title="Links"
-      description="Where every button and link in the design goes. Redirect and tracking links (bit.ly, ?utm_…) work."
-    >
+    <SectionCard title="Links">
       {links.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           This design has no links.
@@ -393,11 +364,7 @@ function LinksCard({
                   />
                   <p className="min-w-0">
                     <span className="font-medium">{label}</span>
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · each person&rsquo;s own Unsubscribe link, filled in when
-                      it&rsquo;s sent
-                    </span>
+                    <span className="text-muted-foreground"> · automatic</span>
                   </p>
                 </div>
               )

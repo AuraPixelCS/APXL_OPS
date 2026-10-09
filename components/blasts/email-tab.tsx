@@ -28,12 +28,7 @@ import {
   TextField,
 } from "@/components/settings/form-bits"
 import { Button } from "@/components/ui/button"
-import {
-  Field,
-  FieldError,
-  FieldHelper,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { FileUpload, FileUploadTrigger } from "@/components/ui/file-upload"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
@@ -85,10 +80,7 @@ export function EmailTab({
             pane === "preview" && "max-lg:hidden"
           )}
         >
-          <SectionCard
-            title="From"
-            description="Who the email comes from, and where replies go."
-          >
+          <SectionCard title="From">
             <TextField
               label="Sender name"
               value={v.fromName}
@@ -104,7 +96,6 @@ export function EmailTab({
               onChange={(x) => set("fromEmail", x)}
               error={e.fromEmail}
               placeholder="hello@aurapixel.live"
-              helper="Must be on a domain verified in Resend, like @aurapixel.live."
             />
             <TextField
               label="Replies go to (optional)"
@@ -114,7 +105,6 @@ export function EmailTab({
               onChange={(x) => set("replyTo", x)}
               error={e.replyTo}
               placeholder={v.fromEmail || "Same as the sender"}
-              helper="Leave empty to get replies at the sender email."
             />
           </SectionCard>
 
@@ -125,21 +115,16 @@ export function EmailTab({
               onChange={(x) => set("subject", x)}
               error={e.subject}
               placeholder="e.g. {name}, your seat for the March workshop"
-              helper={`${BLAST_PLACEHOLDER} becomes each person's first name.`}
             />
             <TextField
               label="Preview text (optional)"
               value={v.preheader}
               onChange={(x) => set("preheader", x)}
               error={e.preheader}
-              helper="The grey line most inboxes show after the subject."
             />
           </SectionCard>
 
-          <SectionCard
-            title="Layout"
-            description="Write the email here, or send the client's own finished design."
-          >
+          <SectionCard title="Layout">
             <FilterTabs
               value={v.design}
               onChange={(d) => set("design", d)}
@@ -204,10 +189,7 @@ function StandardSections({
   const { values: v, errors: e, set } = form
   return (
     <>
-      <SectionCard
-        title="Banner (optional)"
-        description="A wide image at the top. 1200 × 400 px works well."
-      >
+      <SectionCard title="Banner (optional)">
         <BannerField blastId={blast.id} form={form} />
       </SectionCard>
 
@@ -225,10 +207,7 @@ function StandardSections({
         />
       </SectionCard>
 
-      <SectionCard
-        title="Button (optional)"
-        description="One clear thing to do, like Register or Chat on WhatsApp."
-      >
+      <SectionCard title="Button (optional)">
         <div className="grid gap-5 sm:grid-cols-2">
           <TextField
             label="Button text"
@@ -262,7 +241,6 @@ function StandardSections({
           onChange={(x) => set("footer", x)}
           error={e.footer}
           max={BLAST_LIMITS.footer}
-          helper="Who it's from and your address. An Unsubscribe link is always added under it."
         />
       </SectionCard>
     </>
@@ -380,14 +358,6 @@ function BodyField({
       />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {!error && (
-            <FieldHelper>
-              Leave a blank line between paragraphs. **bold**, [link
-              text](https://…), lines starting with - become a list, and{" "}
-              {BLAST_PLACEHOLDER} becomes the person&rsquo;s first name
-              (&ldquo;there&rdquo; when we don&rsquo;t have one).
-            </FieldHelper>
-          )}
           <FieldError>{error}</FieldError>
         </div>
         <span
@@ -486,9 +456,6 @@ function BannerField({
       ) : (
         <div className="flex flex-col items-start gap-2 rounded-xl border border-dashed p-4">
           {picker("Add a banner image", "outline")}
-          <p className="text-sm text-muted-foreground">
-            JPG, PNG, GIF or WebP. Big images are shrunk for you.
-          </p>
         </div>
       )}
       {(error || form.errors.bannerId) && (
@@ -531,12 +498,6 @@ function ColorField({
           aria-label="Colour code"
         />
       </div>
-      {!error && (
-        <FieldHelper>
-          Use the client&rsquo;s brand colour. Text on it turns black or white
-          to stay readable.
-        </FieldHelper>
-      )}
       <FieldError>{error}</FieldError>
     </Field>
   )
@@ -710,10 +671,6 @@ function EmailPreview({
           style={{ maxWidth: device === "phone" ? 390 : undefined }}
         />
       </div>
-      <p className="border-t px-4 py-2 text-xs text-muted-foreground">
-        Shown as it would reach{" "}
-        {sampleName ? `someone called ${sampleName}` : "someone"}.
-      </p>
     </section>
   )
 }
@@ -763,7 +720,6 @@ function TestDialog({
       open
       onClose={onClose}
       title="Send a test"
-      description="Sends the email as it is on screen, saved or not, with [Test] in the subject."
       footer={
         <>
           <Button variant="outline" size="xl" onClick={onClose} disabled={busy}>

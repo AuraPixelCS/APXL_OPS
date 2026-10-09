@@ -5,7 +5,13 @@
 // MAX_SEND_PER_REQUEST; the server skips anyone already sent or unsubscribed.
 
 import { createListCollection } from "@ark-ui/react/collection"
-import { SearchIcon, SendIcon, TriangleAlertIcon, XIcon } from "lucide-react"
+import {
+  SearchIcon,
+  SendIcon,
+  TriangleAlertIcon,
+  UserPlusIcon,
+  XIcon,
+} from "lucide-react"
 import * as React from "react"
 import type { BlastEmailForm } from "@/components/blasts/use-blast-email-form"
 import { CheckMark } from "@/components/common/check-mark"
@@ -92,6 +98,7 @@ export function RecipientsTab({
   sources,
   form,
   onEditEmail,
+  onAddPerson,
 }: {
   blast: Blast
   rows: RecipientRow[]
@@ -101,6 +108,7 @@ export function RecipientsTab({
   sources: Map<string, string>
   form: BlastEmailForm
   onEditEmail: () => void
+  onAddPerson: () => void
 }) {
   const [filter, setFilter] = React.useState<Filter>("not_sent")
   const [sheetId, setSheetId] = React.useState(ALL_SHEETS)
@@ -214,6 +222,15 @@ export function RecipientsTab({
               onChange={(e) => setSearch(e.target.value)}
             />
           </InputGroup>
+          <Button
+            variant="outline"
+            size="xl"
+            className="sm:ms-auto"
+            onClick={onAddPerson}
+          >
+            <UserPlusIcon />
+            Add a person
+          </Button>
         </div>
         {selectable.length > 0 && (
           <div
@@ -640,7 +657,6 @@ function ConfirmSend({
       open
       onClose={busy ? () => {} : onClose}
       title={`Send to ${n.toLocaleString()} ${n === 1 ? "person" : "people"}?`}
-      description="Each person gets the email once. Sent emails can't be taken back."
       footer={
         <>
           <Button variant="outline" size="xl" onClick={onClose} disabled={busy}>

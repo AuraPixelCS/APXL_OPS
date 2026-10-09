@@ -48,8 +48,14 @@ export interface BlastList {
   fileName: string
   people: number
   canEmail: number
+  /** The blast's "Added by hand" list (people added one at a time). */
+  manual: boolean
   createdAt: Date | null
 }
+
+/** Each blast keeps people added one at a time in one list with a fixed id. */
+export const handListId = (blastId: string) => `${blastId}-added`
+export const HAND_LIST_NAME = "Added by hand"
 
 /** Firestore's array-contains-any takes at most 30 values. */
 export const MAX_BLAST_SHEETS = 30

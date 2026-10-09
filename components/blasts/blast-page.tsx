@@ -10,10 +10,12 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   Trash2Icon,
+  UserPlusIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import * as React from "react"
+import { AddPersonDialog } from "@/components/blasts/add-person-dialog"
 import { EmailTab } from "@/components/blasts/email-tab"
 import { ListUpload, type PickedList } from "@/components/blasts/list-upload"
 import { RecipientsTab } from "@/components/blasts/recipients-tab"
@@ -52,7 +54,7 @@ import type { Blast, BlastList } from "@/lib/blasts/types"
 import type { Sheet } from "@/lib/leads/sheets"
 
 type Tab = "recipients" | "email"
-type Dialog = "rename" | "audience" | "delete" | null
+type Dialog = "rename" | "audience" | "person" | "delete" | null
 
 const SHOWN_SHEETS = 4
 
@@ -80,7 +82,8 @@ export function BlastPage() {
   const sources = React.useMemo(() => {
     const m = new Map<string, string>()
     for (const s of sheets) m.set(s.id, s.title)
-    for (const l of lists) m.set(l.id, `${l.name} (uploaded)`)
+    for (const l of lists)
+      m.set(l.id, l.manual ? l.name : `${l.name} (uploaded)`)
     return m
   }, [sheets, lists])
   const { data: recipients } = useRecipients(id)
@@ -157,17 +160,28 @@ export function BlastPage() {
                       label: s ? `${s.title} · ${s.client}` : "Deleted sheet",
                     }
                   }),
-                  ...blast.listIds.map((lid) => ({
-                    id: lid,
-                    file: true,
-                    label:
-                      lists.find((l) => l.id === lid)?.name ?? "Uploaded file",
-                  })),
+                  ...blast.listIds.map((lid) => {
+                    const l = lists.find((x) => x.id === lid)
+                    return {
+                      id: lid,
+                      file: true,
+                      manual: l?.manual ?? false,
+                      label: l
+                        ? l.manual
+                          ? `${l.name} · ${l.canEmail}`
+                          : l.name
+                        : "Uploaded file",
+                    }
+                  }),
                 ]
                   .slice(0, SHOWN_SHEETS)
                   .map((c) => (
                     <Badge key={c.id} variant="outline" className="max-w-full">
-                      {c.file && <FileUpIcon aria-label="Uploaded file" />}
+                      {"manual" in c && c.manual ? (
+                        <UserPlusIcon aria-label="Added by hand" />
+                      ) : (
+                        c.file && <FileUpIcon aria-label="Uploaded file" />
+                      )}
                       <span className="truncate">{c.label}</span>
                     </Badge>
                   ))}
@@ -266,6 +280,7 @@ export function BlastPage() {
                 sources={sources}
                 form={form}
                 onEditEmail={() => setTab("email")}
+                onAddPerson={() => setDialog("person")}
               />
             )}
           </TabsContent>
@@ -287,6 +302,9 @@ export function BlastPage() {
           lists={lists}
           onClose={() => setDialog(null)}
         />
+      )}
+      {blast && dialog === "person" && (
+        <AddPersonDialog blast={blast} onClose={() => setDialog(null)} />
       )}
       {blast && dialog === "delete" && (
         <DeleteDialog blast={blast} onClose={() => setDialog(null)} />
@@ -311,6 +329,10 @@ function BlastMenu({ onPick }: { onPick: (d: Dialog) => void }) {
         <MenuItem value="audience">
           <ListChecksIcon />
           Change who it goes to
+        </MenuItem>
+        <MenuItem value="person">
+          <UserPlusIcon />
+          Add a person
         </MenuItem>
         <MenuSeparator />
         <MenuItem value="delete" variant="destructive">
@@ -445,7 +467,6 @@ function AudienceDialog({
       onClose={onClose}
       title="Who it goes to"
       size="xl"
-      description="Add a new month's sheet or another file to keep sending from the same blast. Removing one doesn't undo anything: people already sent to stay in the Sent list."
       footer={
         <>
           <Button variant="outline" size="xl" onClick={onClose} disabled={busy}>
@@ -481,10 +502,17 @@ function AudienceDialog({
                 key={l.id}
                 className="flex min-w-0 items-center gap-3 px-3 py-2"
               >
-                <FileUpIcon
-                  className="size-4 shrink-0 text-muted-foreground"
-                  aria-hidden
-                />
+                {l.manual ? (
+                  <UserPlusIcon
+                    className="size-4 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
+                ) : (
+                  <FileUpIcon
+                    className="size-4 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{l.name}</span>
                   <span className="block text-xs text-muted-foreground">
