@@ -126,8 +126,11 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   AuraPixel-branded email for the client: people on the list, emailed, still to send,
   delivered / bounced (and opened / clicked when the sending domain tracks them),
   unsubscribed, and send rounds by Malaysia-time day. `lib/blasts/report.ts` (pure,
-  tested) builds and renders it, so the dialog preview, Save as PDF (prints a popup
-  copy) and the sent email match. `lib/blasts/report-server.ts` reads what happened to
+  tested) builds and renders it, so the dialog preview and the sent email match. Save
+  as PDF prints `renderReportPdf`, the same numbers laid out for an A4 page (the
+  600px email column printed as a narrow strip down the middle of the page);
+  `@page { margin: 0 }` leaves the browser no room for its date / about:blank header
+  and footer. `lib/blasts/report-server.ts` reads what happened to
   each email from the Resend account it went out through: Resend has no per-blast
   query, so it pages `GET /emails` (newest first, `after` = older, 100 a page, 10 req/s)
   back to the blast's first send and matches the stored `resendId`s by `last_event`

@@ -20,6 +20,7 @@ import {
   parseReportTo,
   REPORT_NOTE_MAX,
   renderReport,
+  renderReportPdf,
 } from "@/lib/blasts/report"
 import type { Blast } from "@/lib/blasts/types"
 import { reportLogoUrl } from "@/lib/blasts/urls"
@@ -81,11 +82,11 @@ export function ReportDialog({
     if (!w) return setErrors({ form: "Allow pop-ups for Ops, then try again." })
     w.document.open()
     w.document.write(
-      renderReport(loaded!.report, {
+      renderReportPdf(loaded!.report, {
         note,
         logoSrc: reportLogoUrl(window.location.origin),
         signature: sender.signature,
-      }).html
+      })
     )
     w.document.close()
     // Print once the logo is in, or it's missing from the PDF.

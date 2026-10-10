@@ -360,6 +360,30 @@ function tiles(r: BlastReport): Tile[] {
   return out
 }
 
+/** "The list" rows: label, value, and whether it's the headline row. */
+function listLines(r: BlastReport): [string, string, boolean][] {
+  const d = r.delivery
+  const out: [string, string, boolean][] = [
+    ["People on the list", n(r.people), true],
+    ["Emailed", n(r.sent), false],
+    ["Still to send", n(r.toSend), false],
+  ]
+  if (r.skipped) out.push(["Opted out before their turn", n(r.skipped), false])
+  if (d?.pending) out.push(["Still being delivered", n(d.pending), false])
+  if (d?.complained) out.push(["Marked as spam", n(d.complained), false])
+  return out
+}
+
+function roundLines(r: BlastReport): [string, string][] {
+  return r.rounds.map((x) => [
+    x.day,
+    `${n(x.sent)} ${x.sent === 1 ? "email" : "emails"}`,
+  ])
+}
+
+const sentShare = (r: BlastReport) =>
+  r.people ? Math.round((r.sent / r.people) * 100) : 0
+
 function tileHtml(t: Tile | undefined): string {
   if (!t) return `<td width="50%" style="width:50%;padding:6px;"></td>`
   return `<td width="50%" valign="top" style="width:50%;padding:6px;">
@@ -420,25 +444,18 @@ export function renderReport(
     { length: Math.ceil(t.length / 2) },
     (_, i) => `<tr>${tileHtml(t[i * 2])}${tileHtml(t[i * 2 + 1])}</tr>`
   ).join("\n")
-  const sentShare = r.people ? Math.round((r.sent / r.people) * 100) : 0
+  const share = sentShare(r)
   const bar =
     r.people > 0
       ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 6px;border-radius:999px;overflow:hidden;background:${LINE};">
-<tr>${sentShare > 0 ? `<td width="${sentShare}%" height="10" style="height:10px;line-height:10px;font-size:0;background:${BLUE};">&nbsp;</td>` : ""}${sentShare < 100 ? `<td height="10" style="height:10px;line-height:10px;font-size:0;">&nbsp;</td>` : ""}</tr>
+<tr>${share > 0 ? `<td width="${share}%" height="10" style="height:10px;line-height:10px;font-size:0;background:${BLUE};">&nbsp;</td>` : ""}${share < 100 ? `<td height="10" style="height:10px;line-height:10px;font-size:0;">&nbsp;</td>` : ""}</tr>
 </table>`
       : ""
-  const listRows = [
-    rowHtml("People on the list", n(r.people), true),
-    rowHtml("Emailed", n(r.sent)),
-    rowHtml("Still to send", n(r.toSend)),
-    r.skipped ? rowHtml("Opted out before their turn", n(r.skipped)) : "",
-    d && d.pending ? rowHtml("Still being delivered", n(d.pending)) : "",
-    d && d.complained ? rowHtml("Marked as spam", n(d.complained)) : "",
-  ].join("\n")
-  const roundRows = r.rounds
-    .map((x) =>
-      rowHtml(x.day, `${n(x.sent)} ${x.sent === 1 ? "email" : "emails"}`)
-    )
+  const listRows = listLines(r)
+    .map(([a, b, strong]) => rowHtml(a, b, strong))
+    .join("\n")
+  const roundRows = roundLines(r)
+    .map(([a, b]) => rowHtml(a, b))
     .join("\n")
   const meta = [when && `Sent ${when}`, r.from && `From ${r.from}`]
     .filter(Boolean)
@@ -527,23 +544,8 @@ AuraPixel Creative Media Studio · <a href="https://www.aurapixel.live" style="c
       .join("\n"),
     note.trim(),
     lines(t.map((x) => [x.label, x.sub ? `${x.value} (${x.sub})` : x.value])),
-    lines([
-      ["People on the list", n(r.people)],
-      ["Emailed", n(r.sent)],
-      ["Still to send", n(r.toSend)],
-      ...(r.skipped
-        ? [["Opted out before their turn", n(r.skipped)] as [string, string]]
-        : []),
-      ...(d && d.pending
-        ? [["Still being delivered", n(d.pending)] as [string, string]]
-        : []),
-      ...(d && d.complained
-        ? [["Marked as spam", n(d.complained)] as [string, string]]
-        : []),
-    ]),
-    r.rounds.length
-      ? `Send rounds\n${lines(r.rounds.map((x) => [x.day, `${n(x.sent)} ${x.sent === 1 ? "email" : "emails"}`]))}`
-      : "",
+    lines(listLines(r).map(([a, b]) => [a, b])),
+    r.rounds.length ? `Send rounds\n${lines(roundLines(r))}` : "",
     ["Prepared by AuraPixel", sign].filter(Boolean).join("\n"),
     `Figures as of ${asOf} (Malaysia time).`,
   ]
@@ -551,6 +553,136 @@ AuraPixel Creative Media Studio · <a href="https://www.aurapixel.live" style="c
     .join("\n\n")
 
   return { subject, html, text }
+}
+
+// ── Save as PDF: the same report laid out for an A4 page ───────────────────
+
+/**
+ * A full-page A4 document for the browser to print to PDF. The email is a
+ * 600px column (what inboxes need); on paper that left half the page empty.
+ * `@page { margin: 0 }` also leaves no room for the browser's own header and
+ * footer (date, about:blank, page numbers), so the page is all ours.
+ */
+export function renderReportPdf(
+  r: BlastReport,
+  { note, logoSrc, signature }: ReportRenderOptions
+): string {
+  const when = period(r)
+  const asOf = dateTime.format(new Date(r.generatedAt))
+  const t = tiles(r)
+  const cols = t.length <= 4 ? t.length : 3
+  const sign = signature.trim()
+  const title = [r.client, "Email campaign report", r.campaign]
+    .filter(Boolean)
+    .join(" - ")
+  const rows = (lines: [string, string, boolean?][]) =>
+    lines
+      .map(
+        ([a, b, strong]) =>
+          `<tr><td>${esc(a)}</td><td class="num${strong ? " strong" : ""}">${esc(b)}</td></tr>`
+      )
+      .join("")
+  const rounds = roundLines(r)
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)}</title>
+<style>
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body { margin: 0; }
+body { background: #d1d5db; font-family: ${FONT}; color: ${BODY}; }
+.sheet { width: 210mm; min-height: 297mm; margin: 24px auto; background: #fff; box-shadow: 0 6px 30px rgba(0,0,0,.18); display: flex; flex-direction: column; }
+.top { background: ${INK}; padding: 10mm 16mm 9mm; display: flex; align-items: center; justify-content: space-between; gap: 10mm; }
+.top img { display: block; width: 38mm; height: auto; }
+.kicker { text-align: right; color: #9fb4d6; font-size: 9pt; line-height: 1.5; letter-spacing: .2em; text-transform: uppercase; }
+.kicker b { display: block; margin-top: 2mm; color: #fff; font-size: 10.5pt; font-weight: 600; letter-spacing: .02em; text-transform: none; }
+.rule { height: 1.6mm; background: linear-gradient(90deg, #0094ff, #0272e2, #0b49c4); }
+.content { flex: 1; padding: 9mm 16mm 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.for { font-size: 9pt; letter-spacing: .16em; text-transform: uppercase; color: ${MUTED}; }
+h1 { margin: 2.5mm 0 3mm; font-size: 21pt; line-height: 1.2; font-weight: 700; color: ${INK}; }
+.meta { display: flex; flex-wrap: wrap; gap: 1.5mm 8mm; font-size: 10.5pt; color: ${MUTED}; }
+.note { margin-top: 6mm; font-size: 11pt; line-height: 1.6; }
+.note p { margin: 0 0 3mm; }
+.tiles { display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 4mm; margin-top: 8mm; break-inside: avoid; }
+.tile { background: ${TILE}; border-radius: 3mm; padding: 4mm 5mm; border-top: 1mm solid ${BLUE}; }
+.tile .label { font-size: 9.5pt; color: ${MUTED}; }
+.tile .value { margin-top: 1mm; font-size: 22pt; line-height: 1.1; font-weight: 700; color: ${INK}; }
+.tile .sub { margin-top: 1mm; min-height: 1.3em; font-size: 9.5pt; font-weight: 600; color: ${BLUE}; }
+.cols { display: grid; grid-template-columns: ${rounds.length ? "1fr 1fr" : "1fr"}; gap: 12mm; margin-top: 9mm; }
+tr, .bar { break-inside: avoid; }
+h2 { break-after: avoid; }
+h2 { margin: 0 0 3mm; font-size: 12.5pt; color: ${INK}; }
+.bar { height: 2.4mm; margin-bottom: 1mm; border-radius: 99px; background: ${LINE}; overflow: hidden; }
+.bar span { display: block; height: 100%; background: ${BLUE}; }
+table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+td { padding: 2.2mm 0; border-bottom: .3mm solid ${LINE}; }
+td.num { text-align: right; white-space: nowrap; font-weight: 600; color: ${INK}; }
+td.strong { font-weight: 700; }
+.foot { padding: 8mm 16mm 9mm; break-inside: avoid; }
+.foot-in { padding-top: 5mm; border-top: .3mm solid ${LINE}; display: flex; justify-content: space-between; align-items: flex-end; gap: 10mm; font-size: 9.5pt; line-height: 1.6; }
+.foot strong { color: ${INK}; }
+.asof { text-align: right; color: ${MUTED}; }
+@media print {
+  body { background: #fff; }
+  .sheet { margin: 0; box-shadow: none; display: block; min-height: 0; }
+}
+@media screen and (max-width: 840px) {
+  .sheet { width: auto; min-height: 0; margin: 0; }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .cols { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="top">
+<img src="${esc(logoSrc)}" alt="AuraPixel">
+<div class="kicker">Email campaign report<b>${esc(dateOnly.format(new Date(r.generatedAt)))}</b></div>
+</div>
+<div class="rule"></div>
+<div class="content">
+${r.client ? `<div class="for">Prepared for ${esc(r.client)}</div>` : ""}
+<h1>${esc(r.campaign)}</h1>
+<div class="meta">${[when && `Sent ${when}`, r.from && `From ${r.from}`]
+    .filter(Boolean)
+    .map((x) => `<span>${esc(x as string)}</span>`)
+    .join("")}</div>
+${
+  note.trim()
+    ? `<div class="note">${note
+        .replace(/\r\n?/g, "\n")
+        .trim()
+        .split(/\n{2,}/)
+        .map((p) => `<p>${p.split("\n").map(esc).join("<br>")}</p>`)
+        .join("")}</div>`
+    : ""
+}
+<div class="tiles">${t
+    .map(
+      (x) =>
+        `<div class="tile"><div class="label">${esc(x.label)}</div><div class="value">${esc(x.value)}</div><div class="sub">${esc(x.sub)}</div></div>`
+    )
+    .join("")}</div>
+<div class="cols">
+<section>
+<h2>The list</h2>
+${r.people ? `<div class="bar"><span style="width:${sentShare(r)}%"></span></div>` : ""}
+<table>${rows(listLines(r))}</table>
+</section>
+${rounds.length ? `<section><h2>Send rounds</h2><table>${rows(rounds)}</table></section>` : ""}
+</div>
+</div>
+<div class="foot"><div class="foot-in">
+<div><strong>Prepared by AuraPixel</strong>${sign ? `<br>${sign.split("\n").map(esc).join("<br>")}` : ""}</div>
+<div class="asof">Figures as of ${esc(asOf)}<br>(Malaysia time)</div>
+</div></div>
+</div>
+</body>
+</html>`
 }
 
 // ── The list of people (CSV attachment) ────────────────────────────────────

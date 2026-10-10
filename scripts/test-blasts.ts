@@ -36,6 +36,7 @@ import {
   parseResendTime,
   percent,
   renderReport,
+  renderReportPdf,
   reportCsv,
 } from "../lib/blasts/report.ts"
 
@@ -683,6 +684,27 @@ ok(
       signature: "",
     }).html.includes(">Still to send<"),
   "without Resend's side, the report shows only what Ops knows"
+)
+const pdf = renderReportPdf(rep, {
+  note: "Hi <team>",
+  logoSrc: "https://www.aurapixel.live/ops/report-logo.png",
+  signature: "The AuraPixel team",
+})
+ok(
+  pdf.includes("@page { size: A4; margin: 0; }") &&
+    pdf.includes("repeat(3, 1fr)") &&
+    pdf.includes(
+      "<title>ThinkTx - Email campaign report - Budget 2027 &amp; you</title>"
+    ) &&
+    pdf.includes("Hi &lt;team&gt;") &&
+    !pdf.includes("<team>"),
+  "Save as PDF is a full A4 page (no browser header/footer), escaped, 3 tiles a row for 6"
+)
+ok(
+  renderReportPdf(blind, { note: "", logoSrc: "x", signature: "" }).includes(
+    "repeat(4, 1fr)"
+  ),
+  "four tiles sit in one row on the page"
 )
 const csv = reportCsv(repRows)
 ok(
