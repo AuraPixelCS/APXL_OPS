@@ -31,6 +31,8 @@ export interface RecipientRow {
   client: string
   status: RowStatus
   sentAt: Date | null
+  /** The last time it was sent to them again. */
+  resentAt: Date | null
   error: string | null
   /** Sent earlier, but its sheet is no longer in this blast. */
   outside: boolean
@@ -50,6 +52,9 @@ const STALE_CLAIM_MS = 10 * 60_000
 
 export const canSelect = (r: RecipientRow) =>
   !r.outside && (r.status === "not_sent" || r.status === "failed")
+
+/** Already got it, still in the blast and not unsubscribed: can be sent again. */
+export const canResend = (r: RecipientRow) => !r.outside && r.status === "sent"
 
 export function buildRows(
   leads: AudienceLead[],
@@ -76,6 +81,7 @@ export function buildRows(
         client: l.client,
         status: "cant_email",
         sentAt: null,
+        resentAt: null,
         error: null,
         outside: false,
       })
@@ -96,6 +102,7 @@ export function buildRows(
       client: l.client,
       status: "not_sent",
       sentAt: null,
+      resentAt: null,
       error: null,
       outside: false,
     })
@@ -111,6 +118,7 @@ export function buildRows(
       client: "",
       status: "sent",
       sentAt: null,
+      resentAt: null,
       error: null,
       outside: true,
     })
@@ -119,6 +127,7 @@ export function buildRows(
     const rec = recipients.get(row.key)
     if (rec) {
       row.sentAt = rec.sentAt
+      row.resentAt = rec.resentAt ?? null
       row.error = rec.error
       const stale =
         rec.status === "sending" &&

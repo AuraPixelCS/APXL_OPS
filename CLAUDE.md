@@ -122,6 +122,15 @@ reported here. The n8n side lives in `../pxl-auto`. Read the Second Brain note
   touch Leads. `POST /api/blasts/people/{add,remove}` (`addPerson`/`removePerson` in
   `lib/blasts/server.ts`): adding refuses an address already anywhere in the blast (409);
   removing the last one deletes the list unless it's the blast's only source.
+- **Sending again** (Mandy 2026-10-10): every Sent row has a **Resend** button (one
+  person, with the normal confirm), and sent people can be ticked one by one anywhere or
+  in bulk from the Sent tab only (quick-pick / select-all elsewhere use `canSelect`, so
+  they never sweep sent people in). `POST /api/blasts/send` takes `resend: [addresses]`:
+  only those may go out a second time; anyone else already sent is still skipped, and
+  unsubscribed people never get it. A resend writes `resentAt`, `resentBy`, `resends`
+  (+1) and `againResendId`, and KEEPS `sentAt`, `sentBy` and `resendId`, so the client
+  report and the blast's "N sent" stay about the first send (Mandy: "once sent, chill").
+  A failed resend puts the record back as it was (they did get it once).
 - **Client report** ("Report" in the blast page's top bar, Mandy 2026-10-09): an
   AuraPixel-branded email for the client: people on the list, emailed, still to send,
   delivered / bounced (and opened / clicked when the sending domain tracks them),

@@ -1,9 +1,11 @@
-// POST /api/blasts/send { id, emails: string[] } → { sent, failed, skipped, error }
+// POST /api/blasts/send { id, emails: string[], resend?: string[] }
+//   → { sent, resent, failed, notSent, skipped, error }
 //
 // Sends the blast's SAVED email to the chosen addresses, in Resend batches of
 // 100. Only addresses in the blast's sheets are sent to. Anyone already sent,
 // mid-send or unsubscribed is skipped, so a double click or a retry never
-// emails someone twice. Each recipient is claimed ("sending") before the call
+// emails someone twice, unless their address is also in `resend`: the admin
+// picked them to get it again. Unsubscribed people are never sent to. Each recipient is claimed ("sending") before the call
 // and marked sent/failed after. If Resend refuses the whole batch for an
 // account reason (daily limit, bad key, unverified domain) those people go back
 // to how they were, so they show as not sent rather than failed.
@@ -52,6 +54,8 @@ type Claim = {
   member: AudienceMember
   ref: DocumentReference
   token: string
+  /** They already had it; this sends it again. */
+  again: boolean
   /** The doc before we claimed it, to put back if Resend refuses the batch. */
   before: Record<string, unknown> | null
 }
@@ -88,6 +92,11 @@ export async function POST(req: Request) {
       ),
     ]
     if (!requested.length) return fail("Pick who to send to.")
+    const resend = new Set(
+      (Array.isArray(body.resend) ? body.resend : [])
+        .filter((e): e is string => typeof e === "string")
+        .map(emailDocId)
+    )
     if (requested.length > MAX_SEND_PER_REQUEST)
       return fail(`Send to at most ${MAX_SEND_PER_REQUEST} people at a time.`)
 
@@ -117,7 +126,8 @@ export async function POST(req: Request) {
       if (unsubs[i].exists) return void skipped.unsubscribed++
       const rec = recs[i]
       const status = rec.get("status")
-      if (status === "sent") return void skipped.alreadySent++
+      const again = status === "sent" && resend.has(e)
+      if (status === "sent" && !again) return void skipped.alreadySent++
       const claimedAt = rec.get("attemptAt")?.toMillis?.() ?? 0
       if (status === "sending" && Date.now() - claimedAt < STALE_CLAIM_MS)
         return void skipped.inProgress++
@@ -125,11 +135,19 @@ export async function POST(req: Request) {
         member: audience.get(e)!,
         ref: recRefs[i],
         token: rec.get("token") ?? randomBytes(16).toString("base64url"),
+        again,
         before: rec.exists ? (rec.data() ?? null) : null,
       })
     })
     if (!claims.length)
-      return NextResponse.json({ sent: 0, failed: 0, skipped, error: null })
+      return NextResponse.json({
+        sent: 0,
+        resent: 0,
+        failed: 0,
+        notSent: 0,
+        skipped,
+        error: null,
+      })
 
     for (let i = 0; i < claims.length; i += 400) {
       const batch = db.batch()
@@ -155,6 +173,7 @@ export async function POST(req: Request) {
     const banner = bannerUrl(email.bannerId)
     const nonce = randomBytes(6).toString("hex")
     let sent = 0
+    let resent = 0
     let failed = 0
     let error: string | null = null
     let stopped = false
@@ -198,15 +217,27 @@ export async function POST(req: Request) {
             c.ref,
             {
               status: "sent",
-              resendId: res.ids[j],
-              sentAt: FieldValue.serverTimestamp(),
-              sentBy: by,
+              // A resend keeps the first email's id and time, so the client
+              // report (delivery, rounds) stays about the first send.
+              ...(c.again
+                ? {
+                    againResendId: res.ids[j],
+                    resentAt: FieldValue.serverTimestamp(),
+                    resentBy: by,
+                    resends: FieldValue.increment(1),
+                  }
+                : {
+                    resendId: res.ids[j],
+                    sentAt: FieldValue.serverTimestamp(),
+                    sentBy: by,
+                  }),
               error: null,
             },
             { merge: true }
           )
         )
         sent += chunk.length
+        resent += chunk.filter((c) => c.again).length
       } else {
         error ??= res.error
         if (ACCOUNT_LEVEL.has(res.status)) {
@@ -214,24 +245,29 @@ export async function POST(req: Request) {
           for (const c of chunk) restore(batch, c)
         } else {
           for (const c of chunk)
-            batch.set(
-              c.ref,
-              { status: "failed", error: res.error },
-              { merge: true }
-            )
+            // A failed resend leaves them as they were: they did get it once.
+            if (c.again) restore(batch, c)
+            else
+              batch.set(
+                c.ref,
+                { status: "failed", error: res.error },
+                { merge: true }
+              )
           failed += chunk.length
         }
       }
       await batch.commit()
     }
 
+    // "N sent" counts people: sending to someone again doesn't add to it.
     if (sent)
       await blastSnap.ref.update({
-        sentCount: FieldValue.increment(sent),
+        sentCount: FieldValue.increment(sent - resent),
         lastSentAt: FieldValue.serverTimestamp(),
       })
     return NextResponse.json({
       sent,
+      resent,
       failed,
       notSent: claims.length - sent - failed,
       skipped,

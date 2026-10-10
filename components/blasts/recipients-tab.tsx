@@ -3,9 +3,12 @@
 // Who a blast goes to: filter (not sent / sent / failed / …), pick people
 // (a quick "first 100" or one by one), and send. Sends go out in requests of
 // MAX_SEND_PER_REQUEST; the server skips anyone already sent or unsubscribed.
+// People who already got it can be picked to get it again (one by one, or in
+// bulk from the Sent tab only, so a bulk pick elsewhere never sweeps them in).
 
 import { createListCollection } from "@ark-ui/react/collection"
 import {
+  RotateCwIcon,
   SearchIcon,
   SendIcon,
   TriangleAlertIcon,
@@ -50,6 +53,7 @@ import {
 import { toast } from "@/components/ui/toast"
 import { apiPost } from "@/lib/api"
 import {
+  canResend,
   canSelect,
   type RecipientRow,
   type RowStatus,
@@ -67,6 +71,7 @@ const QUICK_PICKS = [50, 100, 200]
 
 type SendResult = {
   sent: number
+  resent: number
   failed: number
   notSent: number
   skipped: {
@@ -116,6 +121,8 @@ export function RecipientsTab({
   const [picked, setPicked] = React.useState<Set<string>>(new Set())
   const [shown, setShown] = React.useState(PAGE)
   const [confirming, setConfirming] = React.useState(false)
+  // One person's Resend button (their row), apart from the picked list.
+  const [resendRow, setResendRow] = React.useState<RecipientRow | null>(null)
 
   const visible = React.useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -126,11 +133,16 @@ export function RecipientsTab({
         (!q || r.name.toLowerCase().includes(q) || r.email.includes(q))
     )
   }, [rows, filter, sheetId, search])
-  const selectable = visible.filter(canSelect)
-  // Someone picked earlier may have been sent meanwhile: only count who's still sendable.
-  const selected = rows.filter((r) => picked.has(r.key) && canSelect(r))
+  // Bulk picks (first N, everyone shown) take people who already got it only
+  // on the Sent tab; elsewhere they're picked one by one.
+  const bulkPick = filter === "sent" ? canResend : canSelect
+  const selectable = visible.filter(bulkPick)
+  const pickable = (r: RecipientRow) => canSelect(r) || canResend(r)
+  // Someone picked earlier may have unsubscribed or been taken out meanwhile.
+  const selected = rows.filter((r) => picked.has(r.key) && pickable(r))
+  const again = selected.filter((r) => r.status === "sent").length
   const page = visible.slice(0, shown)
-  const pageSelectable = page.filter(canSelect)
+  const pageSelectable = page.filter(bulkPick)
   const pageAllOn =
     pageSelectable.length > 0 && pageSelectable.every((r) => picked.has(r.key))
 
@@ -141,6 +153,12 @@ export function RecipientsTab({
       else next.add(key)
       return next
     })
+  }
+
+  function askResend(r: RecipientRow) {
+    if (blocked)
+      return toast.error({ title: "Can’t resend yet", description: blocked })
+    setResendRow(r)
   }
 
   function pickFirst(n: number) {
@@ -309,11 +327,14 @@ export function RecipientsTab({
                   <TableHead>Email</TableHead>
                   <TableHead>Sheet</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-32">
+                    <span className="sr-only">Resend</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {page.map((r) => {
-                  const can = canSelect(r)
+                  const can = pickable(r)
                   const on = picked.has(r.key)
                   return (
                     <TableRow
@@ -359,6 +380,23 @@ export function RecipientsTab({
                       <TableCell>
                         <StatusCell row={r} />
                       </TableCell>
+                      <TableCell className="py-1 text-right">
+                        {canResend(r) && (
+                          <Button
+                            variant="outline"
+                            size="lg"
+                            className="min-h-10"
+                            aria-label={`Resend to ${r.name || r.email}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              askResend(r)
+                            }}
+                          >
+                            <RotateCwIcon />
+                            Resend
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   )
                 })}
@@ -368,7 +406,7 @@ export function RecipientsTab({
 
           <ul className="flex flex-col gap-2 md:hidden">
             {page.map((r) => {
-              const can = canSelect(r)
+              const can = pickable(r)
               const on = picked.has(r.key)
               const inner = (
                 <>
@@ -388,7 +426,7 @@ export function RecipientsTab({
                 </>
               )
               return (
-                <li key={r.key}>
+                <li key={r.key} className="flex items-stretch gap-2">
                   {can ? (
                     <button
                       type="button"
@@ -396,16 +434,27 @@ export function RecipientsTab({
                       aria-checked={on}
                       onClick={() => toggle(r.key)}
                       className={cn(
-                        "flex w-full items-start gap-3 rounded-xl border bg-card px-4 py-3 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 active:bg-accent",
+                        "flex min-w-0 flex-1 items-start gap-3 rounded-xl border bg-card px-4 py-3 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 active:bg-accent",
                         on && "border-primary/60 bg-accent/60"
                       )}
                     >
                       {inner}
                     </button>
                   ) : (
-                    <div className="flex items-start gap-3 rounded-xl border bg-card px-4 py-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3 rounded-xl border bg-card px-4 py-3">
                       {inner}
                     </div>
+                  )}
+                  {canResend(r) && (
+                    <Button
+                      variant="outline"
+                      aria-label={`Resend to ${r.name || r.email}`}
+                      className="h-auto w-16 shrink-0 flex-col gap-1 rounded-xl px-0 text-xs"
+                      onClick={() => askResend(r)}
+                    >
+                      <RotateCwIcon />
+                      Resend
+                    </Button>
                   )}
                 </li>
               )
@@ -460,6 +509,12 @@ export function RecipientsTab({
                 {selected.length.toLocaleString()}
               </span>{" "}
               selected
+              {again > 0 && again < selected.length && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {again.toLocaleString()} again
+                </span>
+              )}
             </p>
             <Button
               variant="ghost"
@@ -474,8 +529,9 @@ export function RecipientsTab({
               disabled={!!blocked}
               onClick={() => setConfirming(true)}
             >
-              <SendIcon />
-              Send to {selected.length.toLocaleString()}
+              {again === selected.length ? <RotateCwIcon /> : <SendIcon />}
+              {again === selected.length ? "Resend to" : "Send to"}{" "}
+              {selected.length.toLocaleString()}
             </Button>
           </div>
         </div>
@@ -490,6 +546,14 @@ export function RecipientsTab({
             setConfirming(false)
             setPicked(new Set())
           }}
+        />
+      )}
+      {resendRow && (
+        <ConfirmSend
+          blast={blast}
+          rows={[resendRow]}
+          onClose={() => setResendRow(null)}
+          onDone={() => setResendRow(null)}
         />
       )}
     </section>
@@ -511,11 +575,13 @@ function StatusCell({ row }: { row: RecipientRow }) {
     return (
       <span
         className="inline-flex items-center gap-1.5"
-        title={formatDateTime(row.sentAt)}
+        title={`Sent ${formatDateTime(row.sentAt)}${row.resentAt ? ` · sent again ${formatDateTime(row.resentAt)}` : ""}`}
       >
         {badge}
         <span className="text-xs text-muted-foreground">
-          {formatRelative(row.sentAt)}
+          {row.resentAt
+            ? `again ${formatRelative(row.resentAt)}`
+            : formatRelative(row.sentAt)}
         </span>
       </span>
     )
@@ -599,10 +665,12 @@ function ConfirmSend({
   const [busy, setBusy] = React.useState(false)
   const [progress, setProgress] = React.useState(0)
   const n = rows.length
+  const again = rows.filter((r) => r.status === "sent").length
+  const verb = again === n ? "Resend to" : "Send to"
 
   async function send() {
     setBusy(true)
-    const total = { sent: 0, failed: 0, notSent: 0, skipped: 0 }
+    const total = { sent: 0, resent: 0, failed: 0, notSent: 0, skipped: 0 }
     let error: string | null = null
     try {
       for (let i = 0; i < rows.length; i += MAX_SEND_PER_REQUEST) {
@@ -610,8 +678,11 @@ function ConfirmSend({
         const r = await apiPost<SendResult>("/api/blasts/send", {
           id: blast.id,
           emails: chunk.map((c) => c.email),
+          // Only these may get it a second time; anyone else already sent is skipped.
+          resend: chunk.filter((c) => c.status === "sent").map((c) => c.email),
         })
         total.sent += r.sent
+        total.resent += r.resent ?? 0
         total.failed += r.failed
         total.notSent += r.notSent
         total.skipped +=
@@ -640,9 +711,21 @@ function ConfirmSend({
     ].filter(Boolean)
     if (total.sent)
       toast.success({
-        title: `Sent to ${total.sent.toLocaleString()} ${total.sent === 1 ? "person" : "people"}`,
+        title: `${total.resent === total.sent ? "Sent again" : "Sent"} to ${total.sent.toLocaleString()} ${total.sent === 1 ? "person" : "people"}`,
         description:
-          [parts.join(" · "), error].filter(Boolean).join(". ") || undefined,
+          [
+            [
+              total.resent &&
+                total.resent < total.sent &&
+                `${total.resent.toLocaleString()} of them again`,
+              ...parts,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            error,
+          ]
+            .filter(Boolean)
+            .join(". ") || undefined,
       })
     else
       toast.error({
@@ -656,15 +739,19 @@ function ConfirmSend({
     <DialogShell
       open
       onClose={busy ? () => {} : onClose}
-      title={`Send to ${n.toLocaleString()} ${n === 1 ? "person" : "people"}?`}
+      title={
+        n === 1
+          ? `${verb} ${rows[0].name || rows[0].email}?`
+          : `${verb} ${n.toLocaleString()} people?`
+      }
       footer={
         <>
           <Button variant="outline" size="xl" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button size="xl" onClick={send} disabled={busy}>
-            {busy ? <Spinner /> : <SendIcon />}
-            {busy ? "Sending…" : `Send to ${n.toLocaleString()}`}
+            {busy ? <Spinner /> : again === n ? <RotateCwIcon /> : <SendIcon />}
+            {busy ? "Sending…" : `${verb} ${n.toLocaleString()}`}
           </Button>
         </>
       }
@@ -685,6 +772,18 @@ function ConfirmSend({
           {n > 3 && ` and ${(n - 3).toLocaleString()} more`}
         </dd>
       </dl>
+      {again > 0 && (
+        <Alert variant="warning">
+          <RotateCwIcon />
+          <AlertDescription>
+            {again === n
+              ? n === 1
+                ? "They already got this email. They'll get it again."
+                : "They all already got this email. They'll get it again."
+              : `${again.toLocaleString()} of them already got this email. They'll get it again.`}
+          </AlertDescription>
+        </Alert>
+      )}
       {busy && n > MAX_SEND_PER_REQUEST && (
         <p className="text-sm text-muted-foreground" aria-live="polite">
           Sent {progress.toLocaleString()} of {n.toLocaleString()}…

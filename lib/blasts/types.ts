@@ -35,8 +35,13 @@ export interface BlastRecipient {
   name: string
   status: RecipientStatus
   error: string | null
+  /** The first time it went out (a resend doesn't move it). */
   sentAt: Date | null
   sentBy: string | null
+  /** The last time it was sent again, on purpose, to someone who had it. */
+  resentAt: Date | null
+  /** How many times it was sent again. */
+  resends: number
   /** When the last send attempt claimed this address. */
   attemptAt: Date | null
   unsubscribedAt: Date | null

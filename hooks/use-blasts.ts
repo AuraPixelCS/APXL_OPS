@@ -144,6 +144,8 @@ export function useRecipients(
                     status: v.status ?? "failed",
                     error: v.error ?? null,
                     sentAt: toDate(v.sentAt),
+                    resentAt: toDate(v.resentAt),
+                    resends: v.resends ?? 0,
                     sentBy: v.sentBy ?? null,
                     attemptAt: toDate(v.attemptAt),
                     unsubscribedAt: toDate(v.unsubscribedAt),

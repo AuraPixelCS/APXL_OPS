@@ -26,6 +26,7 @@ import {
 import { openSecret, sealSecret, secretsReady } from "../lib/secrets.ts"
 import {
   buildRows,
+  canResend,
   canSelect,
   countByStatus,
 } from "../lib/blasts/recipients.ts"
@@ -248,6 +249,13 @@ ok(
   "unsubscribed can't be picked"
 )
 ok(by("l6").status === "cant_email", "no address → can't email")
+ok(
+  canResend(by("b@x.co")) &&
+    !canResend(by("c@x.co")) &&
+    !canResend(by("d@x.co")) &&
+    !canResend(by("old@x.co")),
+  "only people who got it, are still in the blast and didn't unsubscribe can get it again"
+)
 ok(
   by("old@x.co").outside && !canSelect(by("old@x.co")),
   "sent earlier from a removed sheet stays in the history"
